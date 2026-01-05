@@ -1,15 +1,19 @@
-import { useEffect } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
+import { useEffect, useState } from 'react'
+import { onAuthStateChanged, reload } from 'firebase/auth'
 import { auth, isConfigured } from '@/firebase/config'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useThemeStore } from '@/store/useThemeStore'
+import { useLanguageStore } from '@/store/useLanguageStore'
 import Auth from '@/components/Auth'
 import Dashboard from '@/pages/Dashboard'
+import EmailVerificationScreen from '@/components/EmailVerificationScreen'
 import { Toaster } from 'react-hot-toast'
 
 function App() {
   const { user, loading, setUser, setLoading, loadUserData } = useAuthStore()
   const { effectiveTheme } = useThemeStore()
+  const { direction } = useLanguageStore()
+  const [emailVerified, setEmailVerified] = useState(true)
   
   // Apply dark mode class to document
   useEffect(() => {
@@ -19,6 +23,11 @@ function App() {
       document.documentElement.classList.remove('dark')
     }
   }, [effectiveTheme])
+
+  // Apply text direction based on language
+  useEffect(() => {
+    document.documentElement.dir = direction
+  }, [direction])
 
   useEffect(() => {
     if (!isConfigured || !auth) {
@@ -31,7 +40,35 @@ function App() {
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         setUser(firebaseUser)
         if (firebaseUser) {
+          // Check email verification status
+          // Reload user to get latest verification status
+          try {
+            await reload(firebaseUser)
+            
+            // Check if we're in local/test environment
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+            
+            // In local/test, check for local verification flag
+            if ((isLocalhost || isDev) && localStorage.getItem(`email-verified-local-${firebaseUser.uid}`) === 'true') {
+              setEmailVerified(true)
+            } else {
+              setEmailVerified(firebaseUser.emailVerified)
+            }
+          } catch (error) {
+            console.error('Error reloading user:', error)
+            // Fallback: check local verification flag in local/test
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+            if ((isLocalhost || isDev) && localStorage.getItem(`email-verified-local-${firebaseUser.uid}`) === 'true') {
+              setEmailVerified(true)
+            } else {
+              setEmailVerified(firebaseUser.emailVerified)
+            }
+          }
           await loadUserData()
+        } else {
+          setEmailVerified(true)
         }
         setLoading(false)
       }, (error) => {
@@ -46,6 +83,7 @@ function App() {
     }
   }, [setUser, setLoading, loadUserData, isConfigured, auth])
 
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -57,6 +95,38 @@ function App() {
     )
   }
 
+  const handleEmailVerified = async () => {
+    if (auth?.currentUser) {
+      try {
+        await reload(auth.currentUser)
+        
+        // Check if we're in local/test environment
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+        
+        // In local/test, check for local verification flag
+        if ((isLocalhost || isDev) && localStorage.getItem(`email-verified-local-${auth.currentUser.uid}`) === 'true') {
+          setEmailVerified(true)
+        } else {
+          setEmailVerified(auth.currentUser.emailVerified)
+        }
+      } catch (error) {
+        console.error('Error reloading user after verification:', error)
+        // Fallback: check local verification flag in local/test
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+        if ((isLocalhost || isDev) && localStorage.getItem(`email-verified-local-${auth.currentUser.uid}`) === 'true') {
+          setEmailVerified(true)
+        }
+      }
+    }
+  }
+
+  // Check if user should be blocked
+  // Block all unverified email/password users (both production and local)
+  // Google users are auto-verified, so they bypass
+  const shouldBlockAccess = user && !emailVerified && user.providerData[0]?.providerId !== 'google.com'
+
   return (
     <>
       <Toaster position="top-center" />
@@ -67,7 +137,15 @@ function App() {
           </p>
         </div>
       )}
-      {user ? <Dashboard /> : <Auth />}
+      {user ? (
+        shouldBlockAccess ? (
+          <EmailVerificationScreen user={user} onVerified={handleEmailVerified} />
+        ) : (
+          <Dashboard />
+        )
+      ) : (
+        <Auth />
+      )}
     </>
   )
 }

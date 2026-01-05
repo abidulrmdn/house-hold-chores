@@ -15,6 +15,7 @@ export interface User {
   photoURL?: string
   householdId?: string
   createdAt: number
+  language?: 'en' | 'nl' | 'ar' // User's preferred language
 }
 
 export interface Routine {

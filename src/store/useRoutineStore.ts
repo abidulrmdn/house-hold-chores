@@ -316,7 +316,21 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
       // Remove id from updates if present (can't update document ID)
       const { id, ...updateData } = updates as any
       
-      await updateDoc(doc(db, 'taskInstances', taskId), updateData)
+      // Filter out undefined values - Firestore doesn't allow undefined
+      const cleanUpdates: any = {}
+      Object.keys(updateData).forEach(key => {
+        const value = updateData[key]
+        if (value !== undefined) {
+          cleanUpdates[key] = value
+        }
+      })
+      
+      // If no valid updates, return early
+      if (Object.keys(cleanUpdates).length === 0) {
+        return
+      }
+      
+      await updateDoc(doc(db, 'taskInstances', taskId), cleanUpdates)
     } catch (error) {
       console.error('Error updating task:', error)
       throw error
@@ -332,7 +346,27 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
       // Remove id from updates if present (can't update document ID)
       const { id, ...updateData } = updates as any
       
-      await updateDoc(doc(db, 'routines', routineId), updateData)
+      // Filter out undefined values - Firestore doesn't allow undefined
+      // But preserve deleteField() calls for removing fields
+      const cleanUpdates: any = {}
+      Object.keys(updateData).forEach(key => {
+        const value = updateData[key]
+        // Check if it's a deleteField() call (has _methodName property)
+        if (value && typeof value === 'object' && '_methodName' in value && value._methodName === 'FieldValue.delete') {
+          // Import deleteField dynamically
+          const { deleteField } = require('firebase/firestore')
+          cleanUpdates[key] = deleteField()
+        } else if (value !== undefined) {
+          cleanUpdates[key] = value
+        }
+      })
+      
+      // If no valid updates, return early
+      if (Object.keys(cleanUpdates).length === 0) {
+        return
+      }
+      
+      await updateDoc(doc(db, 'routines', routineId), cleanUpdates)
     } catch (error) {
       console.error('Error updating routine:', error)
       throw error

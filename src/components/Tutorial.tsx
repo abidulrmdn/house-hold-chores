@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, ChevronRight, ChevronLeft } from 'lucide-react'
+import { useTranslation } from '@/hooks/useTranslation'
 
 interface TutorialStep {
   id: string
-  title: string
-  content: string
+  titleKey: string
+  contentKey: string
   target: string // CSS selector or 'manual'
   position?: 'top' | 'bottom' | 'left' | 'right' | 'center'
 }
@@ -12,56 +13,57 @@ interface TutorialStep {
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to Routine Manager! 👋',
-    content: 'This app helps you manage household chores and routines. Let\'s take a quick tour of the key features.',
+    titleKey: 'tutorial.welcome',
+    contentKey: 'tutorial.welcomeDesc',
     target: 'manual',
     position: 'center'
   },
   {
     id: 'tabs',
-    title: 'View Tasks by Time',
-    content: 'Use these tabs to filter tasks: Today, This Week, All Tasks, My Tasks, Calendar, and Statistics.',
+    titleKey: 'tutorial.tabs',
+    contentKey: 'tutorial.tabsDesc',
     target: '[data-tutorial="tabs"]',
     position: 'bottom'
   },
   {
     id: 'search',
-    title: 'Search & Filter',
-    content: 'Search tasks by name, category, or assignee. Use quick filters like "Overdue", "Today", "Quick Tasks" to find what you need.',
+    titleKey: 'tutorial.search',
+    contentKey: 'tutorial.searchDesc',
     target: '[data-tutorial="search"]',
     position: 'bottom'
   },
   {
     id: 'task-card',
-    title: 'Task Cards',
-    content: 'Swipe right to complete a task, swipe left to undo. Click the 3-dot menu for more actions like edit, reassign, or delete.',
+    titleKey: 'tutorial.taskCard',
+    contentKey: 'tutorial.taskCardDesc',
     target: '[data-tutorial="task-card"]',
     position: 'top'
   },
   {
     id: 'create-button',
-    title: 'Create New Routine',
-    content: 'Click this button (or press N) to create a new routine. You can set frequency, assign to household members, and add reminders.',
+    titleKey: 'tutorial.createButton',
+    contentKey: 'tutorial.createButtonDesc',
     target: '[data-tutorial="create-button"]',
     position: 'top'
   },
   {
     id: 'settings',
-    title: 'Settings',
-    content: 'Access your profile, manage categories, leave household, or create a new household from the settings menu.',
+    titleKey: 'tutorial.settings',
+    contentKey: 'tutorial.settingsDesc',
     target: '[data-tutorial="settings"]',
     position: 'left'
   },
   {
     id: 'complete',
-    title: 'You\'re All Set! 🎉',
-    content: 'Start by creating your first routine or exploring existing tasks. You can always access this tutorial from Settings.',
+    titleKey: 'tutorial.complete',
+    contentKey: 'tutorial.completeDesc',
     target: 'manual',
     position: 'center'
   }
 ]
 
 export default function Tutorial() {
+  const { t } = useTranslation()
   const [isActive, setIsActive] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [targetElement, setTargetElement] = useState<HTMLElement | null>(null)
@@ -70,12 +72,32 @@ export default function Tutorial() {
 
   useEffect(() => {
     // Check if user has seen tutorial
-    const hasSeenTutorial = localStorage.getItem('has-seen-tutorial')
-    if (!hasSeenTutorial) {
-      // Show tutorial after a short delay
-      setTimeout(() => {
-        setIsActive(true)
-      }, 1000)
+    const checkTutorial = () => {
+      const hasSeenTutorial = localStorage.getItem('has-seen-tutorial')
+      const onboardingCompleted = localStorage.getItem('onboardingCompleted')
+      // Only show tutorial if onboarding is completed (wizard finished) and tutorial not seen
+      if (!hasSeenTutorial && onboardingCompleted) {
+        // Show tutorial after a short delay
+        setTimeout(() => {
+          setIsActive(true)
+        }, 1000)
+      }
+    }
+    
+    checkTutorial()
+    
+    // Listen for storage changes (when onboarding completes)
+    // Note: 'storage' event only fires for changes from other tabs/windows
+    // For same-tab changes, we'll use a custom event
+    const handleStorageChange = () => checkTutorial()
+    window.addEventListener('storage', handleStorageChange)
+    
+    // Also listen for custom event dispatched from Dashboard
+    window.addEventListener('show-tutorial', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('show-tutorial', handleStorageChange)
     }
   }, [])
 
@@ -282,10 +304,10 @@ export default function Tutorial() {
         <div className="flex items-start justify-between mb-3 sm:mb-4">
           <div className="flex-1 pr-2">
             <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 sm:mb-2">
-              {step.title}
+              {t(step.titleKey)}
             </h3>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              {step.content}
+              {t(step.contentKey)}
             </p>
           </div>
           <button
@@ -307,15 +329,15 @@ export default function Tutorial() {
                 className="px-3 py-1.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
               >
                 <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Previous</span>
-                <span className="sm:hidden">Prev</span>
+                <span className="hidden sm:inline">{t('tutorial.previous')}</span>
+                <span className="sm:hidden">{t('tutorial.previous')}</span>
               </button>
             )}
             <button
               onClick={isLastStep ? handleComplete : handleNext}
               className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-1"
             >
-              {isLastStep ? 'Get Started' : 'Next'}
+              {isLastStep ? t('tutorial.finish') : t('tutorial.next')}
               {!isLastStep && <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />}
             </button>
           </div>

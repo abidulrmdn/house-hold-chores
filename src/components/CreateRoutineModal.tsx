@@ -312,23 +312,23 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId, initi
               ))}
             </select>
             <div className="text-sm text-gray-500 mb-2">Or create new category:</div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent min-w-0"
                 placeholder="Category name"
                 disabled={!!categoryId}
               />
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1 sm:flex-nowrap">
                 {COLORS.map(color => (
                   <button
                     key={color}
                     type="button"
                     onClick={() => setCategoryColor(color)}
                     disabled={!!categoryId}
-                    className={`w-10 h-10 rounded-lg border-2 ${
+                    className={`w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0 rounded-lg border-2 ${
                       categoryColor === color ? 'border-gray-800' : 'border-gray-300'
                     }`}
                     style={{ backgroundColor: color }}

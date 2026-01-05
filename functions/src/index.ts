@@ -29,7 +29,7 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated')
   }
 
-  // Rate limiting: Max 10 requests per user per hour
+  // Rate limiting: Max 20 requests per user per hour (increased for onboarding wizard)
   const userId = context.auth.uid
   const rateLimitKey = `suggestions:${userId}`
   const rateLimitRef = admin.firestore().collection('rateLimits').doc(rateLimitKey)
@@ -37,6 +37,7 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
   
   const now = Date.now()
   const oneHourAgo = now - 3600000
+  const RATE_LIMIT = 20 // Increased from 10 to 20 for better onboarding experience
   
   if (rateLimitDoc.exists) {
     const data = rateLimitDoc.data()
@@ -51,8 +52,8 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
       }, { merge: true })
     } else {
       // Check if limit exceeded
-      if (count >= 10) {
-        throw new functions.https.HttpsError('resource-exhausted', 'Rate limit exceeded. Please try again later.')
+      if (count >= RATE_LIMIT) {
+        throw new functions.https.HttpsError('resource-exhausted', `Rate limit exceeded (${RATE_LIMIT} requests/hour). Please try again later.`)
       }
       // Increment count
       await rateLimitRef.set({
@@ -68,7 +69,7 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
     })
   }
 
-  const { routines, categories, tasks } = data
+  const { routines, categories, tasks, language = 'en' } = data
 
   if (!genAI) {
     throw new functions.https.HttpsError('failed-precondition', 'Gemini API not configured')
@@ -86,22 +87,34 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
     const totalTasks = tasks.length
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
+    // Language instruction
+    const languageInstruction = language === 'ar' 
+      ? 'IMPORTANT: Respond in Arabic. All task names, categories, and reasons must be in Arabic.'
+      : language === 'nl'
+      ? 'IMPORTANT: Respond in Dutch. All task names, categories, and reasons must be in Dutch.'
+      : 'IMPORTANT: Respond in English. All task names, categories, and reasons must be in English.'
+
     const prompt = `You are a helpful AI assistant for a household routine management app.
+
+${languageInstruction}
 
 Current household routines: ${routineNames || 'None yet'}
 Existing categories: ${categoryNames || 'None yet'}
 Task completion rate: ${completionRate}%
 
-Based on this information, suggest 3-5 new household tasks/routines that would be useful. Consider:
+Based on this information, suggest 8-20 new household tasks/routines that would be useful. Consider:
 1. Common household maintenance tasks (cleaning, organizing, maintenance)
 2. Tasks that complement existing routines
 3. Seasonal tasks if relevant
-4. Tasks for different household areas (kitchen, bathroom, bedroom, living room, outdoor)
+4. Tasks for different household areas (kitchen, bathroom, bedroom, living room, outdoor, garage, laundry)
 5. Tasks that are commonly missed or forgotten
+6. Deep cleaning tasks that are done less frequently
+7. Organizational tasks
+8. Preventive maintenance tasks
 
 For each suggestion, provide:
 - Task name (short, clear, e.g., "Clean oven" or "Organize pantry")
-- Suggested frequency (daily, weekly, biweekly, or monthly)
+- Suggested frequency (daily, weekly, biweekly, monthly, quarterly, or annually)
 - Suggested category (based on existing categories or suggest a new one)
 - Brief reason why this would be helpful
 
@@ -129,12 +142,56 @@ Do not include any markdown formatting, code blocks, or extra text. Just the JSO
       jsonText = jsonText.replace(/```\n?/g, '')
     }
 
-    const suggestions: TaskSuggestion[] = JSON.parse(jsonText)
+    // Try to extract JSON array from the response
+    // Sometimes AI includes extra text before/after JSON
+    const jsonMatch = jsonText.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      jsonText = jsonMatch[0]
+    }
 
-    return { suggestions }
+    let suggestions: TaskSuggestion[]
+    try {
+      suggestions = JSON.parse(jsonText)
+    } catch (parseError: any) {
+      console.error('Failed to parse AI response:', parseError)
+      console.error('Response text:', text)
+      console.error('Cleaned JSON text:', jsonText)
+      
+      // Return empty array instead of throwing error - fallback will handle it
+      console.warn('Returning empty suggestions array due to parse error')
+      return { suggestions: [] }
+    }
+
+    // Validate suggestions format
+    if (!Array.isArray(suggestions)) {
+      console.error('AI response is not an array:', suggestions)
+      console.error('Response text:', text)
+      // Return empty array instead of throwing error
+      return { suggestions: [] }
+    }
+
+    // Validate and filter suggestions
+    const validSuggestions = suggestions
+      .filter((s: any) => s && s.name && typeof s.name === 'string')
+      .map((s: any) => ({
+        name: s.name.trim(),
+        frequency: s.frequency || 'weekly',
+        category: s.category || 'General',
+        reason: s.reason || 'Useful household task'
+      }))
+      .slice(0, 20) // Limit to 20 suggestions max
+
+    return { suggestions: validSuggestions }
   } catch (error: any) {
     console.error('Error generating suggestions:', error)
-    throw new functions.https.HttpsError('internal', 'Failed to generate suggestions', error.message)
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    })
+    
+    // Return empty array instead of throwing error - frontend will use fallback
+    return { suggestions: [] }
   }
 })
 
@@ -185,7 +242,7 @@ export const parseTaskInput = functions.https.onCall(async (data, context) => {
     })
   }
 
-  const { input, existingCategories } = data
+  const { input, existingCategories, language = 'en' } = data
 
   if (!genAI) {
     throw new functions.https.HttpsError('failed-precondition', 'Gemini API not configured')
@@ -194,9 +251,18 @@ export const parseTaskInput = functions.https.onCall(async (data, context) => {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
 
+    // Language instruction
+    const languageInstruction = language === 'ar' 
+      ? 'IMPORTANT: Respond in Arabic. All task names and categories must be in Arabic.'
+      : language === 'nl'
+      ? 'IMPORTANT: Respond in Dutch. All task names and categories must be in Dutch.'
+      : 'IMPORTANT: Respond in English. All task names and categories must be in English.'
+
     const categoryList = existingCategories.map((c: any) => c.name).join(', ')
 
     const prompt = `Parse this natural language task input into structured data: "${input}"
+
+${languageInstruction}
 
 Existing categories: ${categoryList || 'None'}
 
@@ -282,7 +348,7 @@ export const generateInsights = functions.https.onCall(async (data, context) => 
     })
   }
 
-  const { tasks, routines, categories } = data
+  const { tasks, routines, categories, language = 'en' } = data
 
   if (!genAI) {
     throw new functions.https.HttpsError('failed-precondition', 'Gemini API not configured')
@@ -290,6 +356,13 @@ export const generateInsights = functions.https.onCall(async (data, context) => 
 
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+
+    // Language instruction
+    const languageInstruction = language === 'ar' 
+      ? 'IMPORTANT: Respond in Arabic. All insights must be in Arabic.'
+      : language === 'nl'
+      ? 'IMPORTANT: Respond in Dutch. All insights must be in Dutch.'
+      : 'IMPORTANT: Respond in English. All insights must be in English.'
 
     // Calculate some stats
     const completedTasks = tasks.filter((t: any) => t.isCompleted).length
@@ -312,6 +385,8 @@ export const generateInsights = functions.https.onCall(async (data, context) => 
     })
 
     const prompt = `Analyze this household task data and generate 1-2 helpful, personalized insights:
+
+${languageInstruction}
 
 Total tasks: ${totalTasks}
 Completed: ${completedTasks}
@@ -580,6 +655,124 @@ export const testPushNotification = functions.https.onCall(async (data, context)
     }
     
     throw new functions.https.HttpsError('internal', `Failed to send test notification: ${error.message}`)
+  }
+})
+
+/**
+ * Admin function to send a push notification to a specific user by their user ID
+ * Can be called from Firebase Console or via HTTP request
+ * Usage: Call this function with { userId: 'user-id-here', taskCount: 1, delaySeconds: 0 }
+ */
+export const sendNotificationToUser = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated')
+  }
+
+  // Handle data format - Firebase Console wraps data in 'data' field
+  const requestData = data?.data || data
+  const { userId, taskCount = 1, delaySeconds = 0 } = requestData
+
+  if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+    throw new functions.https.HttpsError('invalid-argument', 'userId is required and must be a non-empty string')
+  }
+
+  // Validate taskCount
+  const validTaskCount = typeof taskCount === 'number' && taskCount > 0 ? taskCount : 1
+  const validDelaySeconds = typeof delaySeconds === 'number' && delaySeconds >= 0 ? delaySeconds : 0
+
+  try {
+    const db = admin.firestore()
+    const messaging = admin.messaging()
+
+    // Get user's FCM token
+    const userDoc = await db.collection('users').doc(userId).get()
+    
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('not-found', `User ${userId} not found`)
+    }
+
+    const userData = userDoc.data()
+    const fcmToken = userData?.fcmToken
+
+    if (!fcmToken) {
+      throw new functions.https.HttpsError('failed-precondition', `User ${userId} has no FCM token. Please enable notifications first.`)
+    }
+
+    // Prepare notification
+    const title = validTaskCount === 1 
+      ? '🧪 Admin Test: 1 task due today! 📋'
+      : `🧪 Admin Test: ${validTaskCount} tasks due today! 📋`
+    
+    const body = validTaskCount === 1
+      ? 'This is an admin test notification. You have 1 task to complete today.'
+      : `This is an admin test notification. You have ${validTaskCount} tasks to complete today.`
+
+    // Send FCM notification
+    const message = {
+      notification: {
+        title,
+        body
+      },
+      data: {
+        type: 'admin-test-notification',
+        url: 'https://household-chores-d8eae.web.app'
+      },
+      token: fcmToken,
+      webpush: {
+        notification: {
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
+          tag: 'admin-test-notification'
+        }
+      }
+    }
+
+    // If delay is specified, wait before sending
+    if (validDelaySeconds > 0) {
+      await new Promise((resolve) => {
+        setTimeout(async () => {
+          try {
+            await messaging.send(message)
+            console.log(`Admin notification sent after ${validDelaySeconds} seconds to user ${userId}`)
+            resolve(undefined)
+          } catch (error) {
+            console.error('Error sending delayed admin notification:', error)
+            resolve(undefined)
+          }
+        }, validDelaySeconds * 1000)
+      })
+      
+      return { 
+        success: true, 
+        message: `Admin notification scheduled for ${validDelaySeconds} seconds to user ${userId}`,
+        taskCount: validTaskCount,
+        delaySeconds: validDelaySeconds
+      }
+    } else {
+      // Send immediately
+      await messaging.send(message)
+      
+      return { 
+        success: true, 
+        message: `Admin notification sent successfully to user ${userId}`,
+        taskCount: validTaskCount
+      }
+    }
+  } catch (error: any) {
+    console.error('Error sending admin notification:', error)
+    
+    if (error.code === 'messaging/invalid-registration-token' || 
+        error.code === 'messaging/registration-token-not-registered') {
+      // Update user to remove invalid token
+      await admin.firestore().collection('users').doc(userId).update({
+        notificationEnabled: false,
+        fcmToken: admin.firestore.FieldValue.delete()
+      })
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid FCM token. User notifications disabled.')
+    }
+    
+    throw new functions.https.HttpsError('internal', `Failed to send admin notification: ${error.message}`)
   }
 })
 

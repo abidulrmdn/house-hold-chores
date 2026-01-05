@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Sparkles, Loader2, Plus, X } from 'lucide-react'
 import { getTaskSuggestions, TaskSuggestion } from '@/services/aiService'
 import { Routine, Category, TaskInstance } from '@/types'
+import { useTranslation } from '@/hooks/useTranslation'
 import toast from 'react-hot-toast'
 
 interface AISuggestionsProps {
@@ -22,6 +23,7 @@ export default function AISuggestions({
   const [suggestions, setSuggestions] = useState<TaskSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const { t } = useTranslation()
 
   const fetchSuggestions = async () => {
     setLoading(true)
@@ -48,7 +50,7 @@ export default function AISuggestions({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">AI Task Suggestions</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('ai.taskSuggestions')}</h3>
         </div>
         {!isExpanded && (
           <button
@@ -56,7 +58,7 @@ export default function AISuggestions({
             disabled={loading}
             className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium disabled:opacity-50"
           >
-            {loading ? 'Loading...' : 'Get Suggestions'}
+            {loading ? t('ai.loading') : t('ai.getSuggestions')}
           </button>
         )}
         {isExpanded && (
@@ -72,7 +74,7 @@ export default function AISuggestions({
       {loading && (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin text-purple-600 dark:text-purple-400" />
-          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Generating suggestions...</span>
+          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{t('ai.generating')}</span>
         </div>
       )}
 
@@ -101,7 +103,7 @@ export default function AISuggestions({
                 <button
                   onClick={() => onSuggestionSelect(suggestion)}
                   className="ml-4 p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors dark:bg-purple-500 dark:hover:bg-purple-600"
-                  title="Add this task"
+                  title={t('ai.addTask')}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -112,14 +114,14 @@ export default function AISuggestions({
             onClick={fetchSuggestions}
             className="w-full text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium py-2"
           >
-            Get More Suggestions
+            {t('ai.getMore')}
           </button>
         </div>
       )}
 
       {isExpanded && !loading && suggestions.length === 0 && (
         <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-          <p>No suggestions available. Try again later.</p>
+          <p>{t('ai.noSuggestions')}</p>
         </div>
       )}
     </div>

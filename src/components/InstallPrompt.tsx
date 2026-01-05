@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { X, Download, Smartphone } from 'lucide-react'
+import { useTranslation } from '@/hooks/useTranslation'
 
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [showPrompt, setShowPrompt] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
+  const { t } = useTranslation()
 
   useEffect(() => {
     // Check if already installed
@@ -88,20 +90,20 @@ export default function InstallPrompt() {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
-            Install App
+            {t('install.installApp')}
           </h3>
           {isIOS ? (
             <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
-              <p>Add this app to your home screen for quick access!</p>
+              <p>{t('install.addToHomeScreen')}</p>
               <ol className="list-decimal list-inside space-y-1 ml-2">
-                <li>Tap the <Download className="w-4 h-4 inline" /> Share button</li>
-                <li>Select "Add to Home Screen"</li>
-                <li>Tap "Add"</li>
+                <li>{t('install.iosStep1')}</li>
+                <li>{t('install.iosStep2')}</li>
+                <li>{t('install.iosStep3')}</li>
               </ol>
             </div>
           ) : (
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Install this app on your device for a better experience and quick access!
+              {t('install.installDescription')}
             </p>
           )}
           <div className="flex gap-2 mt-3">
@@ -111,14 +113,14 @@ export default function InstallPrompt() {
                 className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
               >
                 <Download className="w-4 h-4" />
-                Install
+                {t('install.install')}
               </button>
             )}
             <button
               onClick={handleDismiss}
               className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors"
             >
-              Maybe later
+              {t('install.maybeLater')}
             </button>
           </div>
         </div>

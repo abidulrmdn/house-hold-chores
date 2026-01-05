@@ -27,24 +27,31 @@ const FREQUENCIES: { value: Frequency; label: string }[] = [
 export default function EditTaskModal({ isOpen, onClose, task, routineName }: EditTaskModalProps) {
   const { updateTask, updateRoutine, routines } = useRoutineStore()
   const { household } = useHouseholdStore()
+  
+  // Get the routine for this task
+  const routine = routines.find(r => r.id === task.routineId)
+  
   const [assignedTo, setAssignedTo] = useState(task.assignedTo)
   const [dueDate, setDueDate] = useState(new Date(task.dueDate).toISOString().split('T')[0])
-  const [frequency, setFrequency] = useState<Frequency>('weekly')
+  const [frequency, setFrequency] = useState<Frequency>(routine?.frequency || 'weekly')
   const [householdMembers, setHouseholdMembers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState(task.notes || '')
   const [photos, setPhotos] = useState<string[]>(task.photos || [])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
+  const [reminderEnabled, setReminderEnabled] = useState(routine?.reminderEnabled || false)
+  const [reminderTime, setReminderTime] = useState(routine?.reminderTime ? String(routine.reminderTime) : '60')
+  const [estimatedDuration, setEstimatedDuration] = useState(routine?.estimatedDuration ? String(routine.estimatedDuration) : '')
   const photoInputRef = useRef<HTMLInputElement>(null)
-
-  // Get the routine for this task
-  const routine = routines.find(r => r.id === task.routineId)
 
   useEffect(() => {
     if (isOpen) {
       fetchHouseholdMembers()
       if (routine) {
         setFrequency(routine.frequency)
+        setReminderEnabled(routine.reminderEnabled || false)
+        setReminderTime(routine.reminderTime ? String(routine.reminderTime) : '60')
+        setEstimatedDuration(routine.estimatedDuration ? String(routine.estimatedDuration) : '')
       }
       setNotes(task.notes || '')
       setPhotos(task.photos || [])
@@ -156,19 +163,71 @@ export default function EditTaskModal({ isOpen, onClose, task, routineName }: Ed
     setLoading(true)
 
     try {
-      // Update task
+      // Update task - only include fields that have values
       const taskUpdates: Partial<TaskInstance> = {
         assignedTo,
-        dueDate: new Date(dueDate).getTime(),
-        notes: notes.trim() || undefined,
-        photos: photos.length > 0 ? photos : undefined
+        dueDate: new Date(dueDate).getTime()
       }
+      
+      // Only add notes if it has content
+      if (notes.trim()) {
+        taskUpdates.notes = notes.trim()
+      }
+      
+      // Only add photos if there are any
+      if (photos.length > 0) {
+        taskUpdates.photos = photos
+      }
+      
       await updateTask(task.id, taskUpdates)
 
-      // Update routine frequency if changed
-      if (routine && frequency !== routine.frequency) {
-        await updateRoutine(routine.id, { frequency })
-        toast.success('Task and routine updated successfully')
+      // Update routine if any routine fields changed
+      if (routine) {
+        const routineUpdates: Partial<any> = {}
+        let routineChanged = false
+
+        if (frequency !== routine.frequency) {
+          routineUpdates.frequency = frequency
+          routineChanged = true
+        }
+
+        if (reminderEnabled !== (routine.reminderEnabled || false)) {
+          routineUpdates.reminderEnabled = reminderEnabled
+          routineChanged = true
+        }
+
+        if (reminderEnabled) {
+          const parsedReminderTime = parseInt(reminderTime)
+          if (!isNaN(parsedReminderTime) && parsedReminderTime > 0 && parsedReminderTime !== routine.reminderTime) {
+            routineUpdates.reminderTime = parsedReminderTime
+            routineChanged = true
+          }
+        } else if (routine.reminderTime) {
+          // Use deleteField() to remove the field instead of undefined
+          const { deleteField } = await import('firebase/firestore')
+          routineUpdates.reminderTime = deleteField()
+          routineChanged = true
+        }
+
+        if (estimatedDuration) {
+          const parsedDuration = parseInt(estimatedDuration)
+          if (!isNaN(parsedDuration) && parsedDuration > 0 && parsedDuration !== routine.estimatedDuration) {
+            routineUpdates.estimatedDuration = parsedDuration
+            routineChanged = true
+          }
+        } else if (routine.estimatedDuration) {
+          // Use deleteField() to remove the field instead of undefined
+          const { deleteField } = await import('firebase/firestore')
+          routineUpdates.estimatedDuration = deleteField()
+          routineChanged = true
+        }
+
+        if (routineChanged) {
+          await updateRoutine(routine.id, routineUpdates)
+          toast.success('Task and routine updated successfully')
+        } else {
+          toast.success('Task updated successfully')
+        }
       } else {
         toast.success('Task updated successfully')
       }
@@ -257,26 +316,77 @@ export default function EditTaskModal({ isOpen, onClose, task, routineName }: Ed
           </div>
 
           {routine && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Routine Frequency
-              </label>
-              <select
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value as Frequency)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                required
-              >
-                {FREQUENCIES.map(freq => (
-                  <option key={freq.value} value={freq.value}>
-                    {freq.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Changing frequency will affect future task generation for this routine
-              </p>
-            </div>
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Routine Frequency
+                </label>
+                <select
+                  value={frequency}
+                  onChange={(e) => setFrequency(e.target.value as Frequency)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                >
+                  {FREQUENCIES.map(freq => (
+                    <option key={freq.value} value={freq.value}>
+                      {freq.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Changing frequency will affect future task generation for this routine
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Estimated Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  value={estimatedDuration}
+                  onChange={(e) => setEstimatedDuration(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="e.g., 30"
+                  min="1"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  How long this task typically takes
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="reminderEnabled"
+                  checked={reminderEnabled}
+                  onChange={(e) => setReminderEnabled(e.target.checked)}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <label htmlFor="reminderEnabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Enable reminders for this routine
+                </label>
+              </div>
+
+              {reminderEnabled && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Reminder Time (minutes before due)
+                  </label>
+                  <input
+                    type="number"
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="60"
+                    min="1"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Send reminder this many minutes before the task is due
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           <div>

@@ -35,7 +35,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       const userDoc = await getDoc(doc(db, 'users', user.uid))
       if (userDoc.exists()) {
-        set({ userData: userDoc.data() as User, loading: false })
+        const userData = userDoc.data() as User
+        set({ userData, loading: false })
+        
+        // Load language preference from Firestore if available
+        if (userData.language && typeof window !== 'undefined') {
+          const { useLanguageStore } = await import('@/store/useLanguageStore')
+          const { getCurrentLanguage } = await import('@/i18n')
+          const currentLang = getCurrentLanguage()
+          // Only update if different to avoid unnecessary reloads
+          if (currentLang !== userData.language) {
+            localStorage.setItem('language', userData.language)
+            useLanguageStore.getState().setLanguage(userData.language, false) // Don't save back to Firestore
+          }
+        }
       } else {
         // Create user document if it doesn't exist
         const userData: any = {

@@ -136,13 +136,13 @@ export default function ManageCategoriesModal({ isOpen, onClose, householdId }: 
                 placeholder="Category name"
                 onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
               />
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {COLORS.map(color => (
                   <button
                     key={color}
                     type="button"
                     onClick={() => setNewCategoryColor(color)}
-                    className={`w-10 h-10 rounded-lg border-2 ${
+                    className={`w-10 h-10 sm:w-10 sm:h-10 flex-shrink-0 rounded-lg border-2 ${
                       newCategoryColor === color ? 'border-gray-800' : 'border-gray-300'
                     }`}
                     style={{ backgroundColor: color }}
@@ -168,46 +168,50 @@ export default function ManageCategoriesModal({ isOpen, onClose, householdId }: 
                 {householdCategories.map(category => (
                   <div
                     key={category.id}
-                    className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
                   >
                     {editingId === category.id ? (
                       <>
-                        <div
-                          className="w-6 h-6 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: editingColor }}
-                        />
-                        <input
-                          type="text"
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          className="flex-1 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
-                          autoFocus
-                        />
-                        <div className="flex gap-1">
-                          {COLORS.map(color => (
-                            <button
-                              key={color}
-                              type="button"
-                              onClick={() => setEditingColor(color)}
-                              className={`w-6 h-6 rounded border ${
-                                editingColor === color ? 'border-gray-800' : 'border-gray-300'
-                              }`}
-                              style={{ backgroundColor: color }}
-                            />
-                          ))}
+                        <div className="flex flex-col sm:flex-row gap-2 flex-1 min-w-0 w-full sm:w-auto">
+                          <div
+                            className="w-6 h-6 rounded-full flex-shrink-0 self-center sm:self-auto"
+                            style={{ backgroundColor: editingColor }}
+                          />
+                          <input
+                            type="text"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            className="flex-1 min-w-0 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                            autoFocus
+                          />
+                          <div className="flex flex-wrap gap-1 flex-shrink-0">
+                            {COLORS.map(color => (
+                              <button
+                                key={color}
+                                type="button"
+                                onClick={() => setEditingColor(color)}
+                                className={`w-6 h-6 flex-shrink-0 rounded border ${
+                                  editingColor === color ? 'border-gray-800' : 'border-gray-300'
+                                }`}
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </div>
                         </div>
-                        <button
-                          onClick={handleSaveEdit}
-                          className="px-3 py-1 bg-primary-600 text-white rounded text-sm hover:bg-primary-700"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={handleCancelEdit}
-                          className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
-                        >
-                          Cancel
-                        </button>
+                        <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto">
+                          <button
+                            onClick={handleSaveEdit}
+                            className="flex-1 sm:flex-none px-3 py-1 bg-primary-600 text-white rounded text-sm hover:bg-primary-700 whitespace-nowrap"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="flex-1 sm:flex-none px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300 whitespace-nowrap"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -215,21 +219,23 @@ export default function ManageCategoriesModal({ isOpen, onClose, householdId }: 
                           className="w-6 h-6 rounded-full flex-shrink-0"
                           style={{ backgroundColor: category.color }}
                         />
-                        <span className="flex-1 font-medium text-gray-800">{category.name}</span>
-                        <button
-                          onClick={() => handleStartEdit(category)}
-                          className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
-                          title="Edit category"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(category.id)}
-                          className="p-2 text-gray-600 hover:text-red-600 transition-colors"
-                          title="Delete category"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <span className="flex-1 font-medium text-gray-800 min-w-0 break-words">{category.name}</span>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handleStartEdit(category)}
+                            className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
+                            title="Edit category"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(category.id)}
+                            className="p-2 text-gray-600 hover:text-red-600 transition-colors"
+                            title="Delete category"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>

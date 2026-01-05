@@ -5,6 +5,7 @@ import { isToday, startOfWeek, endOfWeek, isPast, isFuture } from 'date-fns'
 import { CheckSquare, Calendar, Inbox, CheckCircle2, XCircle, User as UserIcon, X } from 'lucide-react'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useAuthStore } from '@/store/useAuthStore'
+import { useTranslation } from '@/hooks/useTranslation'
 import toast from 'react-hot-toast'
 
 interface TaskListProps {
@@ -36,6 +37,7 @@ export default function TaskList({
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const { completeTask, uncompleteTask, updateTask } = useRoutineStore()
   const { user } = useAuthStore()
+  const { t } = useTranslation()
   const filteredTasks = useMemo(() => {
     let filtered = tasks
 
@@ -141,56 +143,56 @@ export default function TaskList({
       if (searchQuery.trim()) {
         return {
           icon: Inbox,
-          title: 'No tasks found',
-          message: `No tasks match "${searchQuery}". Try a different search term.`
+          title: t('task.noTasksFound'),
+          message: t('task.noTasksFoundMessage', { query: searchQuery })
         }
       }
       if (quickFilter === 'overdue') {
         return {
           icon: CheckSquare,
-          title: 'No overdue tasks',
-          message: 'Great job! You\'re all caught up with no overdue tasks.'
+          title: t('task.noOverdueTasks'),
+          message: t('task.noOverdueTasksMessage')
         }
       }
       if (quickFilter === 'today') {
         return {
           icon: Calendar,
-          title: 'No tasks today',
-          message: 'You have no tasks scheduled for today. Enjoy your free time!'
+          title: t('task.noTasksToday'),
+          message: t('task.noTasksTodayMessage')
         }
       }
       if (quickFilter === 'upcoming') {
         return {
           icon: Calendar,
-          title: 'No upcoming tasks',
-          message: 'You have no upcoming tasks. All tasks are either completed or overdue.'
+          title: t('task.noUpcomingTasks'),
+          message: t('task.noUpcomingTasksMessage')
         }
       }
       if (filter === 'today') {
         return {
           icon: Calendar,
-          title: 'No tasks today',
-          message: 'You have no tasks scheduled for today. Enjoy your free time!'
+          title: t('task.noTasksToday'),
+          message: t('task.noTasksTodayMessage')
         }
       }
       if (filter === 'week') {
         return {
           icon: Calendar,
-          title: 'No tasks this week',
-          message: 'You have no tasks scheduled for this week. Great planning!'
+          title: t('task.noTasksThisWeek'),
+          message: t('task.noTasksThisWeekMessage')
         }
       }
       if (filter === 'my-tasks') {
         return {
           icon: CheckSquare,
-          title: 'No tasks assigned to you',
-          message: 'You don\'t have any tasks assigned to you right now.'
+          title: t('task.noTasksAssigned'),
+          message: t('task.noTasksAssignedMessage')
         }
       }
       return {
         icon: Inbox,
-        title: 'No tasks found',
-        message: 'Create your first routine to get started with task management!'
+        title: t('task.noTasksFound'),
+        message: t('task.createFirstRoutine')
       }
     }
 
@@ -236,54 +238,54 @@ export default function TaskList({
   const handleBulkComplete = async () => {
     const incompleteTasks = filteredTasks.filter(t => selectedTasks.has(t.id) && !t.isCompleted)
     if (incompleteTasks.length === 0) {
-      toast.error('No incomplete tasks selected')
+      toast.error(t('task.failedToUpdate'))
       return
     }
 
     if (!user?.uid) {
-      toast.error('Please sign in to complete tasks')
+      toast.error(t('common.error'))
       return
     }
 
     try {
       // Use current user's ID so they get credit for completing tasks
       await Promise.all(incompleteTasks.map(task => completeTask(task.id, user.uid)))
-      toast.success(`Completed ${incompleteTasks.length} task${incompleteTasks.length > 1 ? 's' : ''}`)
+      toast.success(t('task.taskCompleted'))
       clearSelection()
     } catch (error) {
-      toast.error('Failed to complete some tasks')
+      toast.error(t('task.failedToUpdate'))
     }
   }
 
   const handleBulkUncomplete = async () => {
     const completedTasks = filteredTasks.filter(t => selectedTasks.has(t.id) && t.isCompleted)
     if (completedTasks.length === 0) {
-      toast.error('No completed tasks selected')
+      toast.error(t('task.failedToUpdate'))
       return
     }
 
     try {
       await Promise.all(completedTasks.map(task => uncompleteTask(task.id)))
-      toast.success(`Uncompleted ${completedTasks.length} task${completedTasks.length > 1 ? 's' : ''}`)
+      toast.success(t('task.taskUncompleted'))
       clearSelection()
     } catch (error) {
-      toast.error('Failed to uncomplete some tasks')
+      toast.error(t('task.failedToUpdate'))
     }
   }
 
   const handleBulkReassign = async (newUserId: string) => {
     const tasksToReassign = filteredTasks.filter(t => selectedTasks.has(t.id) && t.assignedTo !== newUserId)
     if (tasksToReassign.length === 0) {
-      toast.error('No tasks to reassign')
+      toast.error(t('task.failedToUpdate'))
       return
     }
 
     try {
       await Promise.all(tasksToReassign.map(task => updateTask(task.id, { assignedTo: newUserId })))
-      toast.success(`Reassigned ${tasksToReassign.length} task${tasksToReassign.length > 1 ? 's' : ''}`)
+      toast.success(t('task.taskUpdated'))
       clearSelection()
     } catch (error) {
-      toast.error('Failed to reassign some tasks')
+      toast.error(t('task.failedToUpdate'))
     }
   }
 
@@ -295,18 +297,19 @@ export default function TaskList({
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {selectedTasks.size} task{selectedTasks.size !== 1 ? 's' : ''} selected
+                {t('dashboard.tasksSelected', { count: selectedTasks.size })}
               </span>
               <button
                 onClick={selectAll}
                 className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
               >
-                Select all
+                {t('dashboard.selectAll')}
               </button>
             </div>
             <button
               onClick={clearSelection}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              title={t('dashboard.clearSelection')}
             >
               <X className="w-5 h-5" />
             </button>
@@ -317,19 +320,19 @@ export default function TaskList({
               className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <CheckCircle2 className="w-4 h-4" />
-              Complete
+              {t('dashboard.complete')}
             </button>
             <button
               onClick={handleBulkUncomplete}
               className="flex items-center gap-2 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <XCircle className="w-4 h-4" />
-              Uncomplete
+              {t('dashboard.uncomplete')}
             </button>
             <div className="relative group">
               <button className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
                 <UserIcon className="w-4 h-4" />
-                Reassign
+                {t('dashboard.reassign')}
               </button>
               <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 min-w-[150px] hidden group-hover:block z-50">
                 {users.map(user => (
@@ -362,7 +365,7 @@ export default function TaskList({
             className="text-sm text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
           >
             <CheckSquare className="w-4 h-4" />
-            Select tasks
+            {t('dashboard.selectTasks')}
           </button>
         </div>
       )}

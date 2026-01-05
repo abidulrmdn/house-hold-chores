@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/firebase/config'
+import { useLanguageStore } from '@/store/useLanguageStore'
 
 // Initialize functions if available
 let aiFunctions: {
@@ -43,11 +44,14 @@ export async function getTaskSuggestions(
   }
 
   try {
+    // Get language from store (which syncs with localStorage and Firestore)
+    const language = useLanguageStore.getState().language
     const result = await aiFunctions.generateTaskSuggestions({
       routines,
       categories,
       tasks,
-      householdId
+      householdId,
+      language
     })
 
     return (result.data as any).suggestions || []
@@ -69,9 +73,12 @@ export async function parseNaturalLanguageTask(
   }
 
   try {
+    // Get language from store (which syncs with localStorage and Firestore)
+    const language = useLanguageStore.getState().language
     const result = await aiFunctions.parseTaskInput({
       input,
-      existingCategories
+      existingCategories,
+      language
     })
 
     return result.data as ParsedTask
@@ -94,10 +101,13 @@ export async function getSmartInsights(
   }
 
   try {
+    // Get language from store (which syncs with localStorage and Firestore)
+    const language = useLanguageStore.getState().language
     const result = await aiFunctions.generateInsights({
       tasks,
       routines,
-      categories
+      categories,
+      language
     })
 
     return (result.data as any).insights || []

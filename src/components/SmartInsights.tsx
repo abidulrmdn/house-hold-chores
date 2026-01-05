@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Lightbulb, Loader2, X } from 'lucide-react'
 import { getSmartInsights } from '@/services/aiService'
 import { Routine, Category, TaskInstance } from '@/types'
+import { useTranslation } from '@/hooks/useTranslation'
 
 interface SmartInsightsProps {
   tasks: TaskInstance[]
@@ -14,6 +15,7 @@ export default function SmartInsights({ tasks, routines, categories }: SmartInsi
   const [loading, setLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false) // Start collapsed
   const [hasTriedFetch, setHasTriedFetch] = useState(false)
+  const { t } = useTranslation()
 
   const fetchInsights = async () => {
     // Prevent multiple simultaneous fetches
@@ -46,14 +48,14 @@ export default function SmartInsights({ tasks, routines, categories }: SmartInsi
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Lightbulb className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Smart Insights</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('ai.smartInsights')}</h3>
           </div>
           <button
             onClick={fetchInsights}
             disabled={loading || tasks.length === 0}
             className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-yellow-500 dark:hover:bg-yellow-600"
           >
-            {loading ? 'Loading...' : 'Get Insights'}
+            {loading ? t('ai.loading') : t('ai.getInsights')}
           </button>
         </div>
       </div>
@@ -65,7 +67,7 @@ export default function SmartInsights({ tasks, routines, categories }: SmartInsi
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Lightbulb className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">Smart Insights</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('ai.smartInsights')}</h3>
         </div>
         {isExpanded && (
           <button
@@ -80,7 +82,7 @@ export default function SmartInsights({ tasks, routines, categories }: SmartInsi
             onClick={() => setIsExpanded(true)}
             className="text-sm text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
           >
-            Show
+            {t('ai.show')}
           </button>
         )}
       </div>
@@ -88,7 +90,7 @@ export default function SmartInsights({ tasks, routines, categories }: SmartInsi
       {loading && (
         <div className="flex items-center justify-center py-4">
           <Loader2 className="w-4 h-4 animate-spin text-yellow-600 dark:text-yellow-400" />
-          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Analyzing...</span>
+          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{t('ai.analyzing')}</span>
         </div>
       )}
 
@@ -108,12 +110,12 @@ export default function SmartInsights({ tasks, routines, categories }: SmartInsi
 
       {hasTriedFetch && !loading && insights.length === 0 && (
         <div className="text-sm text-gray-600 dark:text-gray-400 py-2">
-          <p>Rate limit reached. Please try again in a few minutes.</p>
+          <p>{t('ai.rateLimitReached')}</p>
           <button
             onClick={fetchInsights}
             className="mt-2 text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 text-sm font-medium"
           >
-            Try Again
+            {t('ai.tryAgain')}
           </button>
         </div>
       )}

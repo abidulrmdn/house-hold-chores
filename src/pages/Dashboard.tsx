@@ -1,9 +1,13 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag, Search, Moon, Sun, ArrowUpDown, X, CheckCircle2, BarChart3, Info } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag, Search, Moon, Sun, ArrowUpDown, X, CheckCircle2, BarChart3, Info, Sparkles, Globe } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
 import { useThemeStore } from '@/store/useThemeStore'
+import { useLanguageStore } from '@/store/useLanguageStore'
+import { useTranslation } from '@/hooks/useTranslation'
+import LanguageSelector from '@/components/LanguageSelector'
 import TaskList from '@/components/TaskList'
 import CreateRoutineModal from '@/components/CreateRoutineModal'
 import InviteModal from '@/components/InviteModal'
@@ -13,10 +17,12 @@ import UserProfileModal from '@/components/UserProfileModal'
 import DayTasksModal from '@/components/DayTasksModal'
 import InstallPrompt from '@/components/InstallPrompt'
 import Tutorial from '@/components/Tutorial'
+import OnboardingWizard from '@/components/OnboardingWizard'
 import StatisticsDashboard from '@/components/StatisticsDashboard'
 import CalendarView from '@/components/CalendarView'
 import AISuggestions from '@/components/AISuggestions'
 import SmartInsights from '@/components/SmartInsights'
+import InviteBanner from '@/components/InviteBanner'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/firebase/config'
 import { requestNotificationPermission, sendTestNotification, scheduleDelayedNotification } from '@/firebase/config'
@@ -57,7 +63,18 @@ export default function Dashboard() {
   const [showQuickTasksInfo, setShowQuickTasksInfo] = useState(false)
   const [pendingSuggestion, setPendingSuggestion] = useState<any>(null)
   const [notificationStatus, setNotificationStatus] = useState<'enabled' | 'disabled' | 'unknown'>('unknown')
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
+  const [isLanguageSelectorOpen, setIsLanguageSelectorOpen] = useState(false)
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
+  const [settingsMenuPosition, setSettingsMenuPosition] = useState<{ top: number; right?: number; left?: number } | null>(null)
   const { theme, setTheme, effectiveTheme } = useThemeStore()
+  const { direction } = useLanguageStore()
+  const { t } = useTranslation()
+
+  // Apply text direction based on language
+  useEffect(() => {
+    document.documentElement.dir = direction
+  }, [direction])
 
   // Check URL for join parameter
   useEffect(() => {
@@ -192,11 +209,37 @@ export default function Dashboard() {
     checkNotificationStatus()
   }, [])
 
+  // Calculate settings menu position when it opens
+  useEffect(() => {
+    if (isSettingsOpen && settingsButtonRef.current) {
+      const button = settingsButtonRef.current
+      const rect = button.getBoundingClientRect()
+      const scrollY = window.scrollY
+      const scrollX = window.scrollX
+      
+      if (direction === 'rtl') {
+        setSettingsMenuPosition({
+          top: rect.bottom + scrollY + 8,
+          left: rect.left + scrollX
+        })
+      } else {
+        setSettingsMenuPosition({
+          top: rect.bottom + scrollY + 8,
+          right: window.innerWidth - rect.right - scrollX
+        })
+      }
+    } else {
+      setSettingsMenuPosition(null)
+    }
+  }, [isSettingsOpen, direction])
+
   // Close settings dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement
-      if (isSettingsOpen && !target.closest('.settings-dropdown')) {
+      if (isSettingsOpen && 
+          !target.closest('.settings-dropdown') && 
+          !target.closest('.settings-menu-portal')) {
         setIsSettingsOpen(false)
       }
     }
@@ -269,6 +312,10 @@ export default function Dashboard() {
       await loadUserData()
       toast.success('Household created!')
       setHouseholdName('')
+      // Open wizard immediately after household creation
+      setTimeout(() => {
+        setIsOnboardingOpen(true)
+      }, 500) // Small delay to ensure userData is updated
     } catch (error: any) {
       console.error('Error creating household:', error)
       const errorMessage = error.message || 'Failed to create household'
@@ -287,82 +334,7 @@ export default function Dashboard() {
     }
   }
 
-  // Show household setup screen if user doesn't have a household
-  // Show it even if userData is still loading (user is authenticated)
-  if (user && !userData?.householdId) {
-    return (
-      <>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md">
-            <div className="text-center mb-8">
-              <Home className="w-16 h-16 text-primary-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Welcome!</h2>
-              <p className="text-gray-600 dark:text-gray-400">Set up your household to get started</p>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Household Name
-                </label>
-                <input
-                  type="text"
-                  value={householdName}
-                  onChange={(e) => setHouseholdName(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateHousehold()}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="e.g., The Smiths"
-                  autoFocus={!isJoinModalOpen}
-                />
-              </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCreateHousehold}
-                  disabled={!householdName.trim() || isCreatingHousehold}
-                  className="flex-1 bg-primary-600 text-white py-2.5 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCreatingHousehold ? 'Creating...' : 'Create Household'}
-                </button>
-                <button
-                  onClick={() => {
-                    if (!user) {
-                      toast.error('Please sign in first')
-                      return
-                    }
-                    console.log('Opening join modal')
-                    setIsJoinModalOpen(true)
-                  }}
-                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Users className="w-4 h-4" />
-                  Join Existing
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Render join modal even on welcome screen */}
-        <JoinHouseholdModal
-          isOpen={isJoinModalOpen}
-          onClose={() => {
-            setIsJoinModalOpen(false)
-            setJoinHouseholdId(null)
-          }}
-          onSuccess={async () => {
-            console.log('Join success callback - reloading user data')
-            await loadUserData()
-            toast.success('Redirecting to dashboard...')
-            setJoinHouseholdId(null)
-          }}
-          initialHouseholdId={joinHouseholdId}
-        />
-      </>
-    )
-  }
-
-  // Calculate task counts for badges
+  // Calculate task counts for badges - MUST be before any conditional returns
   const taskCounts = useMemo(() => {
     const now = new Date()
     const weekStart = startOfWeek(now, { weekStartsOn: 1 })
@@ -402,14 +374,14 @@ export default function Dashboard() {
     }
   }, [notificationStatus, userData?.householdId, tasks, user?.uid])
 
-  const tabs = [
-    { id: 'today' as const, label: 'Today', icon: Calendar, count: taskCounts.today },
-    { id: 'week' as const, label: 'This Week', icon: Calendar, count: taskCounts.week },
-    { id: 'my-tasks' as const, label: 'My Tasks', icon: User, count: taskCounts['my-tasks'] },
-    { id: 'all' as const, label: 'All', icon: CheckSquare, count: taskCounts.all },
-    { id: 'calendar' as const, label: 'Calendar', icon: Calendar, count: undefined },
-    { id: 'stats' as const, label: 'Statistics', icon: BarChart3, count: undefined }
-  ]
+  const tabs = useMemo(() => [
+    { id: 'today' as const, label: t('dashboard.today'), icon: Calendar, count: taskCounts.today },
+    { id: 'week' as const, label: t('dashboard.thisWeek'), icon: Calendar, count: taskCounts.week },
+    { id: 'my-tasks' as const, label: t('dashboard.myTasks'), icon: User, count: taskCounts['my-tasks'] },
+    { id: 'all' as const, label: t('dashboard.all'), icon: CheckSquare, count: taskCounts.all },
+    { id: 'calendar' as const, label: t('dashboard.calendar'), icon: Calendar, count: undefined },
+    { id: 'stats' as const, label: t('dashboard.statistics'), icon: BarChart3, count: undefined }
+  ], [t, taskCounts])
 
   // Clear quick filter when switching tabs
   useEffect(() => {
@@ -513,12 +485,87 @@ export default function Dashboard() {
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [isModalOpen, isInviteModalOpen, isJoinModalOpen, isManageCategoriesOpen, isUserProfileOpen, isDayTasksModalOpen, isSettingsOpen])
 
+  // Show household setup screen if user doesn't have a household
+  // IMPORTANT: This must be AFTER all hooks
+  if (user && !userData?.householdId) {
+    return (
+      <>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md">
+            <div className="text-center mb-8">
+              <Home className="w-16 h-16 text-primary-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">{t('common.welcome')}!</h2>
+              <p className="text-gray-600 dark:text-gray-400">{t('household.welcomeSetup')}</p>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('household.householdName')}
+                </label>
+                <input
+                  type="text"
+                  value={householdName}
+                  onChange={(e) => setHouseholdName(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleCreateHousehold()}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder={t('household.householdNamePlaceholder')}
+                  autoFocus={!isJoinModalOpen}
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateHousehold}
+                  disabled={!householdName.trim() || isCreatingHousehold}
+                  className="flex-1 bg-primary-600 text-white py-2.5 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreatingHousehold ? t('common.loading') : t('household.createHousehold')}
+                </button>
+                <button
+                  onClick={() => {
+                    if (!user) {
+                      toast.error(t('auth.signIn'))
+                      return
+                    }
+                    console.log('Opening join modal')
+                    setIsJoinModalOpen(true)
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  {t('household.joinExisting')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Render join modal even on welcome screen */}
+        <JoinHouseholdModal
+          isOpen={isJoinModalOpen}
+          onClose={() => {
+            setIsJoinModalOpen(false)
+            setJoinHouseholdId(null)
+          }}
+          onSuccess={async () => {
+            console.log('Join success callback - reloading user data')
+            await loadUserData()
+            toast.success('Redirecting to dashboard...')
+            setJoinHouseholdId(null)
+          }}
+          initialHouseholdId={joinHouseholdId}
+        />
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 transition-colors">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 transition-colors overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between min-h-16 py-2 sm:py-0 sm:h-16 gap-2 sm:gap-4">
+          <div className="flex items-center justify-between min-h-16 py-2 sm:py-0 sm:h-16 gap-2 sm:gap-4 overflow-hidden">
             <div className="flex-1 min-w-0">
               {household && (
                 <h1 className="text-xl sm:text-2xl font-bold text-primary-700 dark:text-primary-400 truncate">{household.name}</h1>
@@ -622,7 +669,7 @@ export default function Dashboard() {
                   )}
                 </button>
                 {import.meta.env.DEV && (
-                  <div className="absolute right-0 top-full mt-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 min-w-[200px]">
+                  <div className={`absolute ${direction === 'rtl' ? 'left-0' : 'right-0'} top-full mt-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 min-w-[200px] max-w-[calc(100vw-2rem)]`}>
                     <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 px-2">Test Notifications</div>
                     <button
                       onClick={async () => {
@@ -633,7 +680,7 @@ export default function Dashboard() {
                           toast.error(error.message || 'Failed to send test notification')
                         }
                       }}
-                      className="px-3 py-1.5 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 whitespace-nowrap text-left w-full"
+                      className="px-3 py-1.5 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 whitespace-nowrap text-start w-full"
                       title="Send immediate browser notification"
                     >
                       Browser Notification
@@ -647,7 +694,7 @@ export default function Dashboard() {
                           toast.error(error.message || 'Failed to schedule delayed notification')
                         }
                       }}
-                      className="px-3 py-1.5 bg-green-500 text-white text-xs rounded hover:bg-green-600 whitespace-nowrap text-left w-full"
+                      className="px-3 py-1.5 bg-green-500 text-white text-xs rounded hover:bg-green-600 whitespace-nowrap text-start w-full"
                       title="Schedule notification for 10 seconds (works when browser is closed)"
                     >
                       Delayed (10s)
@@ -671,7 +718,7 @@ export default function Dashboard() {
                           toast.error(`Failed: ${error.message || 'Unknown error'}`)
                         }
                       }}
-                      className="px-3 py-1.5 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 whitespace-nowrap text-left w-full"
+                      className="px-3 py-1.5 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 whitespace-nowrap text-start w-full"
                       title="Test FCM push notification in 10 seconds (close browser to test)"
                     >
                       🧪 Test Push (10s delay)
@@ -694,7 +741,7 @@ export default function Dashboard() {
                           toast.error(`Failed: ${error.message || 'Unknown error'}`)
                         }
                       }}
-                      className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 whitespace-nowrap text-left w-full"
+                      className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 whitespace-nowrap text-start w-full"
                       title="Test FCM push notification with 5 tasks in 10 seconds"
                     >
                       🧪 Test Push (5 tasks, 10s)
@@ -722,6 +769,7 @@ export default function Dashboard() {
               {userData?.householdId && (
                 <div className="relative settings-dropdown flex-shrink-0">
                   <button
+                    ref={settingsButtonRef}
                     onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                     className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
                     title="Settings"
@@ -729,28 +777,63 @@ export default function Dashboard() {
                   >
                     <Settings className="w-5 h-5" />
                   </button>
-                  {isSettingsOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                  {isSettingsOpen && settingsMenuPosition && createPortal(
+                    <div 
+                      className="settings-menu-portal fixed w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-[100] overflow-hidden"
+                      style={{
+                        top: `${settingsMenuPosition.top}px`,
+                        ...(direction === 'rtl' 
+                          ? { left: `${settingsMenuPosition.left}px` }
+                          : { right: `${settingsMenuPosition.right}px` }
+                        )
+                      }}
+                    >
                       <button
                         onClick={() => {
                           setIsUserProfileOpen(true)
                           setIsSettingsOpen(false)
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <User className="w-4 h-4" />
-                        Profile Settings
+                        {t('profile.profile')}
                       </button>
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                      <button
+                        onClick={() => {
+                          setIsLanguageSelectorOpen(!isLanguageSelectorOpen)
+                        }}
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <Globe className="w-4 h-4" />
+                        {t('language.language')}
+                      </button>
+                      {isLanguageSelectorOpen && (
+                        <div className="px-2 pb-2">
+                          <LanguageSelector />
+                        </div>
+                      )}
                       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
                         onClick={() => {
                           setIsManageCategoriesOpen(true)
                           setIsSettingsOpen(false)
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <Tag className="w-4 h-4" />
-                        Manage Categories
+                        {t('category.categories')}
+                      </button>
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                      <button
+                        onClick={() => {
+                          setIsOnboardingOpen(true)
+                          setIsSettingsOpen(false)
+                        }}
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        {t('dashboard.setupWizard')}
                       </button>
                       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
@@ -758,10 +841,10 @@ export default function Dashboard() {
                           setIsInviteModalOpen(true)
                           setIsSettingsOpen(false)
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <Users className="w-4 h-4" />
-                        Invite to Household
+                        {t('household.inviteMembers')}
                       </button>
                       {import.meta.env.DEV && (
                         <>
@@ -785,7 +868,7 @@ export default function Dashboard() {
                                 toast.error(`Failed: ${error.message || 'Unknown error'}`)
                               }
                             }}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                            className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                           >
                             <Bell className="w-4 h-4" />
                             Test Notification (10s)
@@ -795,19 +878,20 @@ export default function Dashboard() {
                       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
                         onClick={handleLeaveHousehold}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <LogOut className="w-4 h-4" />
-                        Leave Household
+                        {t('dashboard.leaveHousehold')}
                       </button>
                       <button
                         onClick={handleCreateNewHousehold}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <Home className="w-4 h-4" />
-                        Create New Household
+                        {t('dashboard.createNewHousehold')}
                       </button>
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
               )}
@@ -815,7 +899,7 @@ export default function Dashboard() {
                 onClick={handleSignOut}
                 className="hidden sm:block text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 whitespace-nowrap"
               >
-                Sign Out
+                {t('auth.signOut')}
               </button>
             </div>
           </div>
@@ -823,7 +907,7 @@ export default function Dashboard() {
       </header>
 
       {/* Search and Filters Bar */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-16 z-30" data-tutorial="search">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-16 z-40" data-tutorial="search">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex flex-col sm:flex-row gap-3">
             {/* Search Bar */}
@@ -831,7 +915,7 @@ export default function Dashboard() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search tasks..."
+                placeholder={t('common.search') + '...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -853,8 +937,8 @@ export default function Dashboard() {
                 onChange={(e) => setSortBy(e.target.value as 'dueDate' | 'assignee')}
                 className="px-4 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
               >
-                <option value="dueDate">Sort by Due Date</option>
-                <option value="assignee">Sort by Assignee</option>
+                <option value="dueDate">{t('dashboard.sortBy')}: {t('dashboard.sortByDueDate')}</option>
+                <option value="assignee">{t('dashboard.sortBy')}: {t('dashboard.sortByAssignee')}</option>
               </select>
               <ArrowUpDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
@@ -870,7 +954,7 @@ export default function Dashboard() {
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
-              Overdue
+              {t('dashboard.overdue')}
             </button>
             <button
               onClick={() => setQuickFilter(quickFilter === 'today' ? null : 'today')}
@@ -880,7 +964,7 @@ export default function Dashboard() {
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
-              Today
+              {t('dashboard.today')}
             </button>
             <button
               onClick={() => setQuickFilter(quickFilter === 'upcoming' ? null : 'upcoming')}
@@ -890,7 +974,7 @@ export default function Dashboard() {
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
-              Upcoming
+              {t('dashboard.upcoming')}
             </button>
             <button
               onClick={() => setQuickFilter(quickFilter === 'avoiding' ? null : 'avoiding')}
@@ -899,9 +983,9 @@ export default function Dashboard() {
                   ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
-              title="Tasks you've been avoiding (missed 2+ times)"
+              title={t('dashboard.avoiding')}
             >
-              Avoiding
+              {t('dashboard.avoiding')}
             </button>
             <div className="relative flex items-center gap-1">
               <button
@@ -911,9 +995,9 @@ export default function Dashboard() {
                     ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
-                title="Quick tasks (15 minutes or less)"
+                title={t('dashboard.quickTasksDesc')}
               >
-                Quick Tasks
+                {t('dashboard.quickTasks')}
               </button>
               <button
                 onMouseEnter={() => setShowQuickTasksInfo(true)}
@@ -928,18 +1012,10 @@ export default function Dashboard() {
               {showQuickTasksInfo && (
                 <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-50 text-xs">
                   <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                    Quick Tasks Filter
+                    {t('dashboard.quickTasks')}
                   </div>
                   <div className="text-gray-600 dark:text-gray-400 space-y-1">
-                    <p>Shows tasks that can be completed in 15 minutes or less.</p>
-                    <p className="mt-2 font-medium">Includes:</p>
-                    <ul className="list-disc list-inside ml-2 space-y-0.5">
-                      <li>Tasks with estimated duration ≤ 15 minutes</li>
-                      <li>Tasks without an estimated duration set</li>
-                    </ul>
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                      💡 Tip: Set estimated duration when creating routines to use this filter effectively.
-                    </p>
+                    <p>{t('dashboard.quickTasksDesc')}</p>
                   </div>
                 </div>
               )}
@@ -958,7 +1034,7 @@ export default function Dashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-[140px] sm:top-[120px] z-30">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-[140px] sm:top-[120px] z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-1 overflow-x-auto" data-tutorial="tabs">
             {tabs.map(tab => {
@@ -999,6 +1075,14 @@ export default function Dashboard() {
             tasks={tasks}
             routines={routines}
             categories={categories}
+          />
+        )}
+
+        {/* Invite Banner - Show only if household has only 1 member */}
+        {userData?.householdId && householdUsers.length === 1 && (
+          <InviteBanner
+            householdId={userData.householdId}
+            onInviteClick={() => setIsInviteModalOpen(true)}
           />
         )}
 
@@ -1056,7 +1140,7 @@ export default function Dashboard() {
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors dark:bg-green-500 dark:hover:bg-green-600"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Clear My Today ({incompleteCount})
+                  {t('dashboard.clearMyToday')} ({incompleteCount})
                 </button>
               </div>
             </div>
@@ -1200,7 +1284,7 @@ export default function Dashboard() {
           data-tutorial="create-button"
         >
           <Plus className="w-6 h-6" />
-          <span className="ml-2 hidden sm:inline font-medium">New Routine</span>
+          <span className="ml-2 hidden sm:inline font-medium">{t('dashboard.createRoutine')}</span>
         </button>
       )}
 
@@ -1209,6 +1293,39 @@ export default function Dashboard() {
 
       {/* Tutorial */}
       <Tutorial />
+
+      {/* Onboarding Wizard */}
+      {userData?.householdId && (
+        <OnboardingWizard
+          isOpen={isOnboardingOpen}
+          onClose={() => setIsOnboardingOpen(false)}
+          onComplete={async () => {
+            setIsOnboardingOpen(false)
+            localStorage.setItem('onboardingCompleted', 'true')
+            toast.success('Routines created successfully! 🎉')
+            
+            // Refresh routines and categories to show newly created items
+            // Tasks will auto-update via Firestore subscription, but give it a moment
+            const householdId = userData?.householdId
+            if (householdId) {
+              // Small delay to ensure all Firestore writes are complete
+              setTimeout(async () => {
+                await fetchRoutines(householdId)
+                await fetchCategories(householdId)
+                // Force a re-render by updating a state that triggers useEffect
+                // The subscribeToTasks in useEffect will automatically pick up new tasks
+              }, 500)
+            }
+            
+            // After wizard completes, trigger tutorial by clearing its completion flag
+            setTimeout(() => {
+              localStorage.removeItem('has-seen-tutorial')
+              // Dispatch custom event to trigger tutorial
+              window.dispatchEvent(new Event('show-tutorial'))
+            }, 2000) // Increased delay to let data refresh and wizard close
+          }}
+        />
+      )}
     </div>
   )
 }

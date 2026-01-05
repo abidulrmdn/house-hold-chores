@@ -3,6 +3,7 @@ import { X, Upload, User as UserIcon, Mail } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { storage } from '@/firebase/config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { useTranslation } from '@/hooks/useTranslation'
 import toast from 'react-hot-toast'
 
 interface UserProfileModalProps {
@@ -17,6 +18,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
   const [isSaving, setIsSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(userData?.photoURL || null)
+  const { t } = useTranslation()
 
   // Sync previewUrl with userData when it changes
   useEffect(() => {
@@ -45,13 +47,13 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file')
+      toast.error(t('profile.invalidImageFile'))
       return
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size must be less than 5MB')
+      toast.error(t('profile.imageSizeTooLarge'))
       return
     }
 
@@ -91,7 +93,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
       await loadUserData()
       console.log('User data reloaded')
 
-      toast.success('Profile picture updated!')
+      toast.success(t('profile.profileUpdated'))
     } catch (error: any) {
       console.error('Error uploading profile picture:', error)
       console.error('Error details:', {
@@ -101,13 +103,13 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
       })
       
       // More specific error messages
-      let errorMessage = 'Failed to upload profile picture'
+      let errorMessage = t('profile.failedToUpload')
       if (error?.code === 'storage/unauthorized') {
-        errorMessage = 'Permission denied. Please check Firebase Storage rules. Run: firebase deploy --only storage'
+        errorMessage = t('profile.storageUnauthorized')
       } else if (error?.code === 'storage/canceled') {
-        errorMessage = 'Upload was canceled'
+        errorMessage = t('profile.uploadCanceled')
       } else if (error?.code === 'storage/unknown') {
-        errorMessage = 'Unknown error occurred. Please check Firebase Storage configuration.'
+        errorMessage = t('profile.storageUnknownError')
       } else if (error?.message) {
         errorMessage = error.message
       }
@@ -125,7 +127,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
 
   const handleSave = async () => {
     if (!displayName.trim()) {
-      toast.error('Display name cannot be empty')
+      toast.error(t('profile.displayNameRequired'))
       return
     }
 
@@ -134,11 +136,11 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
     try {
       await updateUserData({ displayName: displayName.trim() })
       await loadUserData() // Reload to get updated data
-      toast.success('Profile updated!')
+      toast.success(t('profile.profileUpdated'))
       onClose()
     } catch (error: any) {
       console.error('Error updating profile:', error)
-      toast.error(`Failed to update: ${error.message || 'Unknown error'}`)
+      toast.error(t('profile.failedToUpdate'))
     } finally {
       setIsSaving(false)
     }
@@ -149,10 +151,10 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
       await updateUserData({ photoURL: '' })
       await loadUserData()
       setPreviewUrl(null)
-      toast.success('Profile picture removed')
+      toast.success(t('profile.photoRemoved'))
     } catch (error: any) {
       console.error('Error removing profile picture:', error)
-      toast.error(`Failed to remove: ${error.message || 'Unknown error'}`)
+      toast.error(t('profile.failedToRemove'))
     }
   }
 
@@ -160,7 +162,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full">
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Profile Settings</h2>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">{t('profile.profileSettings')}</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -189,7 +191,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
                   className="absolute bottom-0 right-0 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-2 shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Upload profile picture"
+                  title={t('profile.uploadPhoto')}
                 >
                   <Upload className="w-4 h-4" />
                 </button>
@@ -209,7 +211,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
                   disabled={isUploading}
                   className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 disabled:opacity-50"
                 >
-                  {isUploading ? 'Uploading...' : 'Change Photo'}
+                  {isUploading ? t('profile.uploading') : t('profile.changePhoto')}
                 </button>
                 {previewUrl && (
                   <>
@@ -218,7 +220,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
                       onClick={handleRemovePhoto}
                       className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                     >
-                      Remove
+                      {t('profile.removePhoto')}
                     </button>
                   </>
                 )}
@@ -226,7 +228,7 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
             )}
             {!isEmailUser && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                Profile picture managed by Google
+                {t('profile.managedByGoogle')}
               </p>
             )}
           </div>
@@ -234,28 +236,28 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
           {/* Email (Read-only) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Email
+              {t('profile.email')}
             </label>
             <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
               <Mail className="w-4 h-4" />
               <span>{userData?.email || user?.email || 'N/A'}</span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Email cannot be changed
+              {t('profile.emailCannotBeChanged')}
             </p>
           </div>
 
           {/* Display Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Display Name *
+              {t('profile.displayName')} *
             </label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Enter your display name"
+              placeholder={t('profile.displayNamePlaceholder')}
               required
             />
           </div>
@@ -266,14 +268,14 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
               onClick={onClose}
               className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving || !displayName.trim() || displayName === userData?.displayName}
               className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {isSaving ? t('profile.saving') : t('profile.saveChanges')}
             </button>
           </div>
         </div>
