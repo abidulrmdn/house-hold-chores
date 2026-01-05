@@ -542,38 +542,60 @@ export default function OnboardingWizard({ isOpen, onClose, onComplete }: Onboar
           </button>
 
           <div className="flex gap-2 flex-1 justify-end min-w-0">
-            {(currentStep === 1 || currentStep === 2) && (
+            {currentStep === 1 ? (
+              // Step 1: Only show Generate button (no Next button)
               <button
                 onClick={generateSuggestions}
                 disabled={selectedAreas.length === 0 || isGenerating}
-                className="px-3 sm:px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium text-sm whitespace-nowrap flex-shrink-0"
-                title={currentStep === 2 ? t('onboarding.regenerate') : t('onboarding.generate')}
+                className="px-6 sm:px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold text-base sm:text-lg whitespace-nowrap flex-shrink-0 shadow-lg hover:shadow-xl"
               >
-                {isGenerating ? t('onboarding.generating') : currentStep === 2 ? t('onboarding.regenerate') : t('onboarding.generate')}
-                {!isGenerating && <Sparkles className="w-4 h-4" />}
+                {isGenerating ? (
+                  <>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+                    />
+                    {t('onboarding.generating')}
+                  </>
+                ) : (
+                  <>
+                    {t('onboarding.generateAIRoutines')}
+                    <Sparkles className="w-5 h-5" />
+                  </>
+                )}
               </button>
-            )}
-            
-            {currentStep === 2 ? (
-              <button
-                onClick={handleCreateRoutines}
-                disabled={suggestedTasks.filter(t => t.selected).length === 0 || isCreating}
-                className="px-4 sm:px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium whitespace-nowrap flex-shrink-0 text-sm sm:text-base"
-              >
-                <span className="hidden sm:inline">
-                  {isCreating ? t('onboarding.creating') : t('onboarding.createRoutines', { count: suggestedTasks.filter(t => t.selected).length })}
-                </span>
-                <span className="sm:hidden">
-                  {isCreating ? t('onboarding.creating') : t('onboarding.createRoutines', { count: suggestedTasks.filter(t => t.selected).length })}
-                </span>
-                {!isCreating && <ArrowRight className="w-4 h-4" />}
-              </button>
+            ) : currentStep === 2 ? (
+              // Step 2: Show Regenerate and Create buttons
+              <>
+                <button
+                  onClick={generateSuggestions}
+                  disabled={selectedAreas.length === 0 || isGenerating}
+                  className="px-3 sm:px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium text-sm whitespace-nowrap flex-shrink-0"
+                  title={t('onboarding.regenerate')}
+                >
+                  {isGenerating ? t('onboarding.generating') : t('onboarding.regenerate')}
+                  {!isGenerating && <Sparkles className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={handleCreateRoutines}
+                  disabled={suggestedTasks.filter(t => t.selected).length === 0 || isCreating}
+                  className="px-4 sm:px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium whitespace-nowrap flex-shrink-0 text-sm sm:text-base"
+                >
+                  <span className="hidden sm:inline">
+                    {isCreating ? t('onboarding.creating') : t('onboarding.createRoutines', { count: suggestedTasks.filter(t => t.selected).length })}
+                  </span>
+                  <span className="sm:hidden">
+                    {isCreating ? t('onboarding.creating') : t('onboarding.createRoutines', { count: suggestedTasks.filter(t => t.selected).length })}
+                  </span>
+                  {!isCreating && <ArrowRight className="w-4 h-4" />}
+                </button>
+              </>
             ) : (
+              // Step 0: Show Next button
               <button
                 onClick={() => {
-                  if (currentStep === 1 && selectedAreas.length > 0) {
-                    generateSuggestions()
-                  } else if (canProceed) {
+                  if (canProceed) {
                     setCurrentStep(currentStep + 1)
                   }
                 }}

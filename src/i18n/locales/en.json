@@ -362,6 +362,7 @@
     "generating": "Generating smart suggestions...",
     "noSuggestions": "No suggestions yet. Click \"Generate Suggestions\" to continue.",
     "generate": "Generate",
+    "generateAIRoutines": "Generate AI-Powered Routines ✨",
     "regenerate": "Regenerate",
     "createRoutines": "Create {{count}}",
     "creating": "Creating...",

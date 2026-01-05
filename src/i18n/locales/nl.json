@@ -362,6 +362,7 @@
     "generating": "Slimme suggesties genereren...",
     "noSuggestions": "Nog geen suggesties. Klik op \"Suggesties Genereren\" om door te gaan.",
     "generate": "Genereren",
+    "generateAIRoutines": "Genereer AI-Aangedreven Routines ✨",
     "regenerate": "Opnieuw Genereren",
     "createRoutines": "{{count}} Aanmaken",
     "creating": "Aanmaken...",
