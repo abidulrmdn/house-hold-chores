@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { X, Copy, Check, Mail, Share2 } from 'lucide-react'
-import { useHouseholdStore } from '@/store/useHouseholdStore'
-import { useAuthStore } from '@/store/useAuthStore'
+import { X, Copy, Check, Share2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface InviteModalProps {
@@ -13,7 +11,6 @@ interface InviteModalProps {
 
 export default function InviteModal({ isOpen, onClose, householdId, householdName }: InviteModalProps) {
   const [copied, setCopied] = useState(false)
-  const { user } = useAuthStore()
 
   if (!isOpen) return null
 

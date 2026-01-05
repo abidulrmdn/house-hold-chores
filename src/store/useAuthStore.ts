@@ -29,6 +29,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
       const userDoc = await getDoc(doc(db, 'users', user.uid))
       if (userDoc.exists()) {
         set({ userData: userDoc.data() as User, loading: false })
@@ -45,7 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           userData.photoURL = user.photoURL
         }
         await setDoc(doc(db, 'users', user.uid), userData)
-        set({ userData: newUserData, loading: false })
+        set({ userData: userData as User, loading: false })
       }
     } catch (error) {
       console.error('Error loading user data:', error)

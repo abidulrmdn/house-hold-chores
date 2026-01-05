@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion'
 import { TaskInstance } from '@/types'
-import { Check, X, AlertCircle } from 'lucide-react'
-import { format, isPast, isToday, isFuture } from 'date-fns'
+import { Check, AlertCircle } from 'lucide-react'
+import { format, isPast, isToday } from 'date-fns'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useAuthStore } from '@/store/useAuthStore'
 

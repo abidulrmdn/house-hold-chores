@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { Routine, Frequency, Category } from '@/types'
+import { Frequency } from '@/types'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
@@ -109,7 +109,7 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
         return
       }
 
-      await createRoutine({
+      const routineData: any = {
         name,
         description,
         categoryId: finalCategoryId,
@@ -117,9 +117,14 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
         assignedTo: assignedTo.length > 0 ? assignedTo : [userData.id],
         householdId,
         createdBy: userData.id,
-        isActive: true,
-        startDate: startDate ? new Date(startDate).getTime() : undefined
-      })
+        isActive: true
+      }
+      
+      if (startDate) {
+        routineData.startDate = new Date(startDate).getTime()
+      }
+      
+      await createRoutine(routineData)
 
       toast.success('Routine created!')
       onClose()

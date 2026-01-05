@@ -7,12 +7,11 @@ import {
   addDoc, 
   updateDoc, 
   doc, 
-  Timestamp,
   orderBy,
   onSnapshot
 } from 'firebase/firestore'
 import { db } from '@/firebase/config'
-import { Routine, TaskInstance, Category, Frequency } from '@/types'
+import { Routine, TaskInstance, Category } from '@/types'
 import { addDays, addWeeks, addMonths, startOfDay, isBefore } from 'date-fns'
 
 interface RoutineState {
@@ -27,7 +26,7 @@ interface RoutineState {
   createCategory: (category: Omit<Category, 'id' | 'createdAt'>) => Promise<string>
   completeTask: (taskId: string, userId: string) => Promise<void>
   subscribeToTasks: (householdId: string, userId?: string) => () => void
-  generateTaskInstances: (routineId: string, routine: Omit<Routine, 'id' | 'createdAt'>) => Promise<void>
+  generateTaskInstances: (routineId: string, routine: Omit<Routine, 'id' | 'createdAt'> | Routine, startDate?: number) => Promise<void>
   checkAndUpdateMissedTasks: () => Promise<void>
 }
 
@@ -40,6 +39,9 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
   fetchRoutines: async (householdId: string) => {
     set({ loading: true })
     try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
       const q = query(
         collection(db, 'routines'),
         where('householdId', '==', householdId),
@@ -61,6 +63,9 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
   fetchTasks: async (householdId: string, userId?: string) => {
     set({ loading: true })
     try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
       let q
       
       if (userId) {
@@ -95,6 +100,9 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
 
   fetchCategories: async (householdId: string) => {
     try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
       const q = query(
         collection(db, 'categories'),
         where('householdId', '==', householdId),
@@ -111,16 +119,22 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
   },
 
-  createRoutine: async (routineData: Omit<Routine, 'id' | 'createdAt'> & { startDate?: number }) => {
+  createRoutine: async (routineData: Omit<Routine, 'id' | 'createdAt'> & { startDate?: number } | any) => {
     try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
+      const { startDate, ...routineWithoutStartDate } = routineData as any
       const routine: Omit<Routine, 'id'> = {
-        ...routineData,
+        ...routineWithoutStartDate,
         createdAt: Date.now()
       }
       const docRef = await addDoc(collection(db, 'routines'), routine)
       
       // Create initial task instances for the next period
-      await get().generateTaskInstances(docRef.id, routineData, routineData.startDate)
+      const taskStartDate = (routineData as any).startDate
+      const routineForInstances = routine as Routine
+      await get().generateTaskInstances(docRef.id, routineForInstances, taskStartDate)
       
       return docRef.id
     } catch (error) {
@@ -130,6 +144,9 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
   },
 
   generateTaskInstances: async (routineId: string, routine: Omit<Routine, 'id' | 'createdAt'> | Routine, startDate?: number) => {
+    if (!db) {
+      throw new Error('Firestore not initialized')
+    }
     const routineData = routine as Routine
     
     // Use startDate if provided, otherwise start from today
@@ -170,19 +187,26 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
 
     // Batch create instances
+    // db is already checked at the start of the function
+    const dbInstance = db!
     const batch = instances.map(instance => 
-      addDoc(collection(db, 'taskInstances'), instance)
+      addDoc(collection(dbInstance, 'taskInstances'), instance)
     )
     await Promise.all(batch)
   },
 
   createCategory: async (categoryData) => {
     try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
       const category: Omit<Category, 'id'> = {
         ...categoryData,
         createdAt: Date.now()
       }
       const docRef = await addDoc(collection(db, 'categories'), category)
+      // Refresh categories list
+      await get().fetchCategories(categoryData.householdId)
       return docRef.id
     } catch (error) {
       console.error('Error creating category:', error)
@@ -192,6 +216,9 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
 
   completeTask: async (taskId: string, userId: string) => {
     try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
       const { tasks } = get()
       const task = tasks.find(t => t.id === taskId)
       if (!task) return
@@ -220,6 +247,10 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
   },
 
   subscribeToTasks: (householdId: string, userId?: string) => {
+    if (!db) {
+      console.error('Firestore not initialized')
+      return () => {}
+    }
     let q
     
     if (userId) {
@@ -254,6 +285,9 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
   },
 
   checkAndUpdateMissedTasks: async () => {
+    if (!db) {
+      return
+    }
     const { tasks, routines } = get()
     const now = startOfDay(new Date())
     

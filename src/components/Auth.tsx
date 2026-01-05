@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth'
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth'
 import { auth, googleProvider } from '@/firebase/config'
 import { useAuthStore } from '@/store/useAuthStore'
 import { LogIn, Mail, Lock, UserPlus } from 'lucide-react'

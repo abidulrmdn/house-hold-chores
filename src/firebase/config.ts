@@ -68,7 +68,7 @@ export { auth, db, googleProvider }
 // Initialize messaging (only in browser, not in service worker)
 let messaging: ReturnType<typeof getMessaging> | null = null
 
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && app) {
   try {
     messaging = getMessaging(app)
   } catch (error) {

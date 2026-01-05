@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { TaskInstance, Routine, Category, User } from '@/types'
 import SwipeableTaskCard from './SwipeableTaskCard'
-import { format, startOfDay, isToday, isThisWeek, isPast, startOfWeek, endOfWeek } from 'date-fns'
+import { isToday, startOfWeek, endOfWeek } from 'date-fns'
 
 interface TaskListProps {
   tasks: TaskInstance[]

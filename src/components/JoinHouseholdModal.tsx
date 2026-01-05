@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Home, Check } from 'lucide-react'
+import { X, Check } from 'lucide-react'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import toast from 'react-hot-toast'
@@ -15,7 +15,7 @@ export default function JoinHouseholdModal({ isOpen, onClose, onSuccess, initial
   const [householdId, setHouseholdId] = useState('')
   const [loading, setLoading] = useState(false)
   const { joinHousehold } = useHouseholdStore()
-  const { user, userData, loadUserData } = useAuthStore()
+  const { user, loadUserData } = useAuthStore()
 
   // Set initial household ID from URL if provided
   useEffect(() => {
