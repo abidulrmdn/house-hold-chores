@@ -154,6 +154,17 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
     const routineData = routine as Routine
     
+    // Validate required fields
+    if (!routineData.assignedTo || routineData.assignedTo.length === 0) {
+      throw new Error('Routine must have at least one assigned user')
+    }
+    if (!routineData.householdId) {
+      throw new Error('Routine must have a householdId')
+    }
+    if (!routineData.frequency) {
+      throw new Error('Routine must have a frequency')
+    }
+    
     // Use startDate if provided, otherwise start from today
     const start = startDate ? new Date(startDate) : new Date()
     const instances: Omit<TaskInstance, 'id'>[] = []
@@ -175,10 +186,22 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
         case 'monthly':
           dueDate = addMonths(start, i)
           break
+        case 'quarterly':
+          dueDate = addMonths(start, i * 3)
+          break
+        case 'annually':
+          dueDate = addMonths(start, i * 12)
+          break
+        default:
+          throw new Error(`Invalid frequency: ${routineData.frequency}`)
       }
 
       // Create instance for each assigned user
       for (const userId of routineData.assignedTo) {
+        if (!userId) {
+          console.warn('Skipping invalid userId in assignedTo array')
+          continue
+        }
         instances.push({
           routineId,
           dueDate: startOfDay(dueDate).getTime(),
@@ -192,12 +215,20 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
 
     // Batch create instances
-    // db is already checked at the start of the function
-    const dbInstance = db!
-    const batch = instances.map(instance => 
-      addDoc(collection(dbInstance, 'taskInstances'), instance)
-    )
-    await Promise.all(batch)
+    if (instances.length === 0) {
+      throw new Error('No task instances to create')
+    }
+    
+    try {
+      const dbInstance = db!
+      const batch = instances.map(instance => 
+        addDoc(collection(dbInstance, 'taskInstances'), instance)
+      )
+      await Promise.all(batch)
+    } catch (error) {
+      console.error('Error creating task instances:', error)
+      throw new Error(`Failed to create task instances: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   },
 
   createCategory: async (categoryData) => {
@@ -228,11 +259,19 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
       const task = tasks.find(t => t.id === taskId)
       if (!task) return
 
-      await updateDoc(doc(db, 'taskInstances', taskId), {
+      // If task is assigned to a different user, reassign it to the completing user
+      const updates: any = {
         isCompleted: true,
         completedDate: Date.now(),
         completedBy: userId
-      })
+      }
+
+      // Reassign task to the user who completed it if it was assigned to someone else
+      if (task.assignedTo !== userId) {
+        updates.assignedTo = userId
+      }
+
+      await updateDoc(doc(db, 'taskInstances', taskId), updates)
 
       // If this task was overdue, check if we need to generate new instances
       const now = startOfDay(new Date())

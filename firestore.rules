@@ -1,6 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Rate limiting collection (for AI functions)
+    match /rateLimits/{document} {
+      allow read, write: if request.auth != null;
+    }
     // Users can read/write their own user document
     // Users can also read other users in the same household
     match /users/{userId} {

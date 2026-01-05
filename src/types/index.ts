@@ -1,4 +1,4 @@
-export type Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly'
+export type Frequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annually'
 
 export interface Category {
   id: string
@@ -20,7 +20,6 @@ export interface User {
 export interface Routine {
   id: string
   name: string
-  description?: string
   categoryId: string
   frequency: Frequency
   assignedTo: string[] // User IDs
@@ -28,7 +27,13 @@ export interface Routine {
   createdAt: number
   createdBy: string
   isActive: boolean
+  reminderTime?: number // Minutes before due date to send reminder (e.g., 60 = 1 hour before)
+  reminderEnabled?: boolean // Whether reminders are enabled for this routine
+  notes?: string // Optional notes for the routine
+  estimatedDuration?: number // Estimated duration in minutes
 }
+
+export type Priority = 'low' | 'medium' | 'high'
 
 export interface TaskInstance {
   id: string
@@ -41,6 +46,9 @@ export interface TaskInstance {
   missedCount: number // Streak of missed tasks
   householdId: string
   createdAt: number
+  priority?: Priority // Optional priority field
+  notes?: string // Optional notes
+  photos?: string[] // Optional photo URLs
 }
 
 export interface Household {

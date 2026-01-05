@@ -10,13 +10,21 @@ interface CreateRoutineModalProps {
   isOpen: boolean
   onClose: () => void
   householdId: string
+  initialSuggestion?: {
+    name: string
+    frequency: string
+    category?: string
+    reason?: string
+  } | null
 }
 
 const FREQUENCIES: { value: Frequency; label: string }[] = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'biweekly', label: 'Bi-weekly' },
-  { value: 'monthly', label: 'Monthly' }
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'annually', label: 'Annually' }
 ]
 
 const COLORS = [
@@ -24,16 +32,19 @@ const COLORS = [
   '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
 ]
 
-export default function CreateRoutineModal({ isOpen, onClose, householdId }: CreateRoutineModalProps) {
+export default function CreateRoutineModal({ isOpen, onClose, householdId, initialSuggestion }: CreateRoutineModalProps) {
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const [frequency, setFrequency] = useState<Frequency>('weekly')
   const [categoryId, setCategoryId] = useState('')
   const [categoryName, setCategoryName] = useState('')
   const [categoryColor, setCategoryColor] = useState(COLORS[0])
   const [assignedTo, setAssignedTo] = useState<string[]>([])
   const [startDate, setStartDate] = useState('')
+  const [reminderEnabled, setReminderEnabled] = useState(false)
+  const [reminderTime, setReminderTime] = useState('60') // Default: 60 minutes before
   const [householdMembers, setHouseholdMembers] = useState<any[]>([])
+  const [notes, setNotes] = useState('')
+  const [estimatedDuration, setEstimatedDuration] = useState('')
   const { createRoutine, createCategory, categories, fetchCategories } = useRoutineStore()
   const { userData } = useAuthStore()
   const { household } = useHouseholdStore()
@@ -44,6 +55,25 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
       fetchHouseholdMembers()
     }
   }, [isOpen, householdId, household?.members])
+
+  // Pre-fill form if suggestion is provided
+  useEffect(() => {
+    if (initialSuggestion && isOpen) {
+      setName(initialSuggestion.name)
+      setFrequency(initialSuggestion.frequency as Frequency)
+      if (initialSuggestion.category) {
+        // Try to find existing category or set as new category name
+        const existingCategory = categories.find(c => 
+          c.name.toLowerCase() === initialSuggestion.category?.toLowerCase()
+        )
+        if (existingCategory) {
+          setCategoryId(existingCategory.id)
+        } else {
+          setCategoryName(initialSuggestion.category)
+        }
+      }
+    }
+  }, [initialSuggestion, isOpen, categories])
 
   const fetchHouseholdMembers = async () => {
     try {
@@ -161,13 +191,34 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
 
       const routineData: any = {
         name,
-        description,
         categoryId: finalCategoryId,
         frequency,
         assignedTo: assignedTo.length > 0 ? assignedTo : [userData.id],
         householdId,
         createdBy: userData.id,
-        isActive: true
+        isActive: true,
+        reminderEnabled: reminderEnabled
+      }
+
+      // Only add reminderTime if reminders are enabled and value is valid
+      if (reminderEnabled && reminderTime) {
+        const parsedTime = parseInt(reminderTime)
+        if (!isNaN(parsedTime) && parsedTime > 0) {
+          routineData.reminderTime = parsedTime
+        }
+      }
+
+      // Only add notes if it has content
+      if (notes.trim()) {
+        routineData.notes = notes.trim()
+      }
+
+      // Only add estimatedDuration if it has a value
+      if (estimatedDuration) {
+        const parsedDuration = parseInt(estimatedDuration)
+        if (!isNaN(parsedDuration) && parsedDuration > 0) {
+          routineData.estimatedDuration = parsedDuration
+        }
       }
       
       if (startDate) {
@@ -179,14 +230,18 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
       toast.success('Routine created!')
       onClose()
       setName('')
-      setDescription('')
       setCategoryId('')
       setCategoryName('')
       setAssignedTo([])
       setStartDate('')
-    } catch (error) {
+      setReminderEnabled(false)
+      setReminderTime('60')
+      setNotes('')
+      setEstimatedDuration('')
+    } catch (error: any) {
       console.error('Error creating routine:', error)
-      toast.error('Failed to create routine')
+      const errorMessage = error?.message || error?.code || 'Unknown error'
+      toast.error(`Failed to create routine: ${errorMessage}`)
     }
   }
 
@@ -215,19 +270,6 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="e.g., Clean bathroom"
               required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              rows={3}
-              placeholder="Optional description..."
             />
           </div>
 
@@ -262,14 +304,14 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
               required={!categoryName}
             >
-              <option value="">Select existing category</option>
+              <option value="">Select existing category (or create new below)</option>
               {categories.filter(cat => cat.householdId === householdId).map(cat => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}
                 </option>
               ))}
             </select>
-            <div className="text-sm text-gray-500 mb-2">Or create new:</div>
+            <div className="text-sm text-gray-500 mb-2">Or create new category:</div>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -357,6 +399,91 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
             <p className="text-xs text-gray-500 mt-1">
               First task will start from this date. If not set, starts from today.
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Estimated Duration (Optional)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={estimatedDuration}
+                onChange={(e) => setEstimatedDuration(e.target.value)}
+                min="1"
+                placeholder="15"
+                className="w-24 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              <span className="text-sm text-gray-600">minutes</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Helps identify quick tasks (15 min or less)
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Notes (Optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              rows={3}
+              placeholder="Add notes, description, or reminders for this routine..."
+            />
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex items-center gap-3 mb-3">
+              <input
+                type="checkbox"
+                id="reminderEnabled"
+                checked={reminderEnabled}
+                onChange={(e) => setReminderEnabled(e.target.checked)}
+                className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+              />
+              <label htmlFor="reminderEnabled" className="text-sm font-medium text-gray-700">
+                Enable Reminders
+              </label>
+            </div>
+            {reminderEnabled && (
+              <div className="ml-7">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Remind Before Due Date
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    min="1"
+                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                  <select
+                    value={reminderTime.includes('1440') ? 'days' : reminderTime.includes('60') ? 'hours' : 'minutes'}
+                    onChange={(e) => {
+                      const current = parseInt(reminderTime)
+                      if (e.target.value === 'days') {
+                        setReminderTime((current / 1440).toString())
+                      } else if (e.target.value === 'hours') {
+                        setReminderTime((current / 60).toString())
+                      } else {
+                        setReminderTime(current.toString())
+                      }
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  You'll receive a notification before each task is due.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-4">

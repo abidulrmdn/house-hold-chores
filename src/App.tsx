@@ -2,12 +2,23 @@ import { useEffect } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, isConfigured } from '@/firebase/config'
 import { useAuthStore } from '@/store/useAuthStore'
+import { useThemeStore } from '@/store/useThemeStore'
 import Auth from '@/components/Auth'
 import Dashboard from '@/pages/Dashboard'
 import { Toaster } from 'react-hot-toast'
 
 function App() {
   const { user, loading, setUser, setLoading, loadUserData } = useAuthStore()
+  const { effectiveTheme } = useThemeStore()
+  
+  // Apply dark mode class to document
+  useEffect(() => {
+    if (effectiveTheme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [effectiveTheme])
 
   useEffect(() => {
     if (!isConfigured || !auth) {

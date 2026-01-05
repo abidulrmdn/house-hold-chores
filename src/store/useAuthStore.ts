@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { User as FirebaseUser } from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+import { User as FirebaseUser, updateProfile } from 'firebase/auth'
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { db, auth } from '@/firebase/config'
 import { User } from '@/types'
 
 interface AuthState {
@@ -12,6 +12,7 @@ interface AuthState {
   setUserData: (userData: User | null) => void
   setLoading: (loading: boolean) => void
   loadUserData: () => Promise<void>
+  updateUserData: (updates: { displayName?: string; photoURL?: string }) => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -53,6 +54,56 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error('Error loading user data:', error)
       set({ loading: false })
+    }
+  },
+  updateUserData: async (updates) => {
+    const { user, userData } = get()
+    if (!user || !userData || !db) {
+      throw new Error('User not authenticated or Firestore not initialized')
+    }
+
+    try {
+      // Update Firebase Auth profile if photoURL or displayName changed
+      const authUpdates: { displayName?: string; photoURL?: string } = {}
+      if (updates.displayName !== undefined) {
+        authUpdates.displayName = updates.displayName
+      }
+      if (updates.photoURL !== undefined) {
+        authUpdates.photoURL = updates.photoURL
+      }
+
+      if (Object.keys(authUpdates).length > 0 && auth?.currentUser) {
+        await updateProfile(auth.currentUser, authUpdates)
+      }
+
+      // Update Firestore user document
+      const userDocRef = doc(db, 'users', user.uid)
+      const firestoreUpdates: any = {}
+      if (updates.displayName !== undefined) {
+        firestoreUpdates.displayName = updates.displayName
+      }
+      if (updates.photoURL !== undefined) {
+        if (updates.photoURL) {
+          firestoreUpdates.photoURL = updates.photoURL
+        } else {
+          // Remove photoURL if set to empty/null
+          firestoreUpdates.photoURL = null
+        }
+      }
+
+      if (Object.keys(firestoreUpdates).length > 0) {
+        await updateDoc(userDocRef, firestoreUpdates)
+      }
+
+      // Update local state
+      const updatedUserData = {
+        ...userData,
+        ...firestoreUpdates
+      }
+      set({ userData: updatedUserData as User })
+    } catch (error) {
+      console.error('Error updating user data:', error)
+      throw error
     }
   }
 }))

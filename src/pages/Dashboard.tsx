@@ -1,20 +1,30 @@
-import { useState, useEffect } from 'react'
-import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag, Search, Moon, Sun, ArrowUpDown, X, CheckCircle2, BarChart3, Info } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
+import { useThemeStore } from '@/store/useThemeStore'
 import TaskList from '@/components/TaskList'
 import CreateRoutineModal from '@/components/CreateRoutineModal'
 import InviteModal from '@/components/InviteModal'
 import JoinHouseholdModal from '@/components/JoinHouseholdModal'
 import ManageCategoriesModal from '@/components/ManageCategoriesModal'
+import UserProfileModal from '@/components/UserProfileModal'
+import DayTasksModal from '@/components/DayTasksModal'
+import InstallPrompt from '@/components/InstallPrompt'
+import Tutorial from '@/components/Tutorial'
+import StatisticsDashboard from '@/components/StatisticsDashboard'
+import CalendarView from '@/components/CalendarView'
+import AISuggestions from '@/components/AISuggestions'
+import SmartInsights from '@/components/SmartInsights'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/firebase/config'
-import { requestNotificationPermission } from '@/firebase/config'
+import { requestNotificationPermission, sendTestNotification, scheduleDelayedNotification } from '@/firebase/config'
 import toast from 'react-hot-toast'
+import { isToday, startOfWeek, endOfWeek } from 'date-fns'
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'all' | 'my-tasks'>('today')
+  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'all' | 'my-tasks' | 'stats' | 'calendar'>('today')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { user, userData, setUser, loadUserData } = useAuthStore()
   const { 
@@ -24,7 +34,8 @@ export default function Dashboard() {
     fetchRoutines, 
     fetchCategories, 
     subscribeToTasks,
-    checkAndUpdateMissedTasks
+    checkAndUpdateMissedTasks,
+    completeTask
   } = useRoutineStore()
   const { household, createHousehold, loadHousehold, leaveHousehold } = useHouseholdStore()
   const [householdName, setHouseholdName] = useState('')
@@ -33,9 +44,18 @@ export default function Dashboard() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
   const [joinHouseholdId, setJoinHouseholdId] = useState<string | null>(null)
   const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false)
+  const [isUserProfileOpen, setIsUserProfileOpen] = useState(false)
+  const [isDayTasksModalOpen, setIsDayTasksModalOpen] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [householdUsers, setHouseholdUsers] = useState<any[]>([])
   const [userFilter, setUserFilter] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'dueDate' | 'assignee'>('dueDate')
+  const [quickFilter, setQuickFilter] = useState<'overdue' | 'today' | 'upcoming' | 'avoiding' | 'quick' | null>(null)
+  const [showQuickTasksInfo, setShowQuickTasksInfo] = useState(false)
+  const [pendingSuggestion, setPendingSuggestion] = useState<any>(null)
+  const { theme, setTheme, effectiveTheme } = useThemeStore()
 
   // Check URL for join parameter
   useEffect(() => {
@@ -248,17 +268,17 @@ export default function Dashboard() {
   if (user && !userData?.householdId) {
     return (
       <>
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md">
             <div className="text-center mb-8">
               <Home className="w-16 h-16 text-primary-600 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome!</h2>
-              <p className="text-gray-600">Set up your household to get started</p>
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Welcome!</h2>
+              <p className="text-gray-600 dark:text-gray-400">Set up your household to get started</p>
             </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Household Name
                 </label>
                 <input
@@ -266,7 +286,7 @@ export default function Dashboard() {
                   value={householdName}
                   onChange={(e) => setHouseholdName(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleCreateHousehold()}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="e.g., The Smiths"
                   autoFocus={!isJoinModalOpen}
                 />
@@ -318,26 +338,162 @@ export default function Dashboard() {
     )
   }
 
+  // Calculate task counts for badges
+  const taskCounts = useMemo(() => {
+    const now = new Date()
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 })
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
+    
+    return {
+      today: tasks.filter(t => isToday(new Date(t.dueDate))).length,
+      week: tasks.filter(t => {
+        const taskDate = new Date(t.dueDate)
+        return taskDate >= weekStart && taskDate <= weekEnd
+      }).length,
+      'my-tasks': tasks.filter(t => t.assignedTo === user?.uid).length,
+      all: tasks.length
+    }
+  }, [tasks, user?.uid])
+
   const tabs = [
-    { id: 'today' as const, label: 'Today', icon: Calendar },
-    { id: 'week' as const, label: 'This Week', icon: Calendar },
-    { id: 'my-tasks' as const, label: 'My Tasks', icon: User },
-    { id: 'all' as const, label: 'All', icon: CheckSquare }
+    { id: 'today' as const, label: 'Today', icon: Calendar, count: taskCounts.today },
+    { id: 'week' as const, label: 'This Week', icon: Calendar, count: taskCounts.week },
+    { id: 'my-tasks' as const, label: 'My Tasks', icon: User, count: taskCounts['my-tasks'] },
+    { id: 'all' as const, label: 'All', icon: CheckSquare, count: taskCounts.all },
+    { id: 'calendar' as const, label: 'Calendar', icon: Calendar, count: undefined },
+    { id: 'stats' as const, label: 'Statistics', icon: BarChart3, count: undefined }
   ]
 
+  // Clear quick filter when switching tabs
+  useEffect(() => {
+    setQuickFilter(null)
+  }, [activeTab])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Escape key - close modals
+      if (e.key === 'Escape') {
+        if (isModalOpen) {
+          setIsModalOpen(false)
+          setPendingSuggestion(null)
+        }
+        if (isInviteModalOpen) {
+          setIsInviteModalOpen(false)
+        }
+        if (isJoinModalOpen) {
+          setIsJoinModalOpen(false)
+        }
+        if (isManageCategoriesOpen) {
+          setIsManageCategoriesOpen(false)
+        }
+        if (isUserProfileOpen) {
+          setIsUserProfileOpen(false)
+        }
+        if (isDayTasksModalOpen) {
+          setIsDayTasksModalOpen(false)
+          setSelectedDate(null)
+        }
+        if (isSettingsOpen) {
+          setIsSettingsOpen(false)
+        }
+        return
+      }
+
+      // Don't trigger shortcuts when typing in inputs
+      if ((e.target as HTMLElement).tagName === 'INPUT' || 
+          (e.target as HTMLElement).tagName === 'TEXTAREA' ||
+          (e.target as HTMLElement).isContentEditable) {
+        return
+      }
+
+      // Ctrl/Cmd + key combinations
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'k':
+            e.preventDefault()
+            // Focus search
+            const searchInput = document.querySelector('input[type="search"], input[placeholder*="Search"]') as HTMLInputElement
+            searchInput?.focus()
+            break
+        }
+        return
+      }
+
+      // Single key shortcuts
+      switch (e.key.toLowerCase()) {
+        case 'n':
+          e.preventDefault()
+          setIsModalOpen(true)
+          break
+        case 's':
+          e.preventDefault()
+          // Focus search
+          const searchInput = document.querySelector('input[type="search"], input[placeholder*="Search"]') as HTMLInputElement
+          searchInput?.focus()
+          break
+        case 't':
+          e.preventDefault()
+          setActiveTab('today')
+          break
+        case 'w':
+          e.preventDefault()
+          setActiveTab('week')
+          break
+        case 'a':
+          e.preventDefault()
+          setActiveTab('all')
+          break
+        case 'm':
+          e.preventDefault()
+          setActiveTab('my-tasks')
+          break
+        case 'c':
+          e.preventDefault()
+          setActiveTab('calendar')
+          break
+        case '?':
+          e.preventDefault()
+          toast('Keyboard Shortcuts:\nN - New routine\nS - Search\nT - Today\nW - Week\nA - All\nM - My Tasks\nC - Calendar\nEsc - Close modals\nCtrl+K - Quick search', {
+            duration: 5000,
+            icon: '⌨️'
+          })
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [isModalOpen, isInviteModalOpen, isJoinModalOpen, isManageCategoriesOpen, isUserProfileOpen, isDayTasksModalOpen, isSettingsOpen])
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between min-h-16 py-2 sm:py-0 sm:h-16 gap-2 sm:gap-4">
             <div className="flex-1 min-w-0">
               {household && (
-                <h1 className="text-xl sm:text-2xl font-bold text-primary-700 truncate">{household.name}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-primary-700 dark:text-primary-400 truncate">{household.name}</h1>
               )}
-              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Routine Manager</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Routine Manager</p>
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              {/* Dark Mode Toggle */}
+              <button
+                onClick={() => {
+                  const newTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark'
+                  setTheme(newTheme)
+                }}
+                className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 flex-shrink-0"
+                title={`Theme: ${theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light'}`}
+              >
+                {effectiveTheme === 'dark' ? (
+                  <Sun className="w-5 h-5" />
+                ) : (
+                  <Moon className="w-5 h-5" />
+                )}
+              </button>
               {userData?.householdId && (
                 <button
                   onClick={() => setIsInviteModalOpen(true)}
@@ -348,25 +504,106 @@ export default function Dashboard() {
                   <span className="hidden sm:inline">Invite</span>
                 </button>
               )}
-              <button
-                onClick={() => {
-                  requestNotificationPermission()
-                    .then((token) => {
+              <div className="relative group">
+                <button
+                  onClick={async () => {
+                    try {
+                      // Check if VAPID key is configured (for debugging)
+                      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
+                      console.log('VAPID Key check:', {
+                        exists: !!vapidKey,
+                        length: vapidKey?.length || 0,
+                        startsWith: vapidKey?.substring(0, 10) || 'none'
+                      })
+                      
+                      // First try to enable push notifications (requires VAPID key)
+                      const token = await requestNotificationPermission()
                       if (token) {
-                        toast.success('Notifications enabled!')
+                        toast.success('Push notifications enabled! You\'ll receive notifications even when the app is closed.')
+                        console.log('FCM Token:', token) // Log token for debugging
                       } else {
-                        toast.error('Notifications not configured. Please set up VAPID key in Firebase.')
+                        // Check if VAPID key is configured
+                        if (!vapidKey || vapidKey === 'demo-vapid-key' || vapidKey.trim() === '') {
+                          toast('VAPID key not configured. Please add VITE_FIREBASE_VAPID_KEY to your .env file and restart the dev server.', { icon: 'ℹ️' })
+                        } else {
+                          // VAPID key is set but token request failed
+                          if (Notification.permission === 'granted') {
+                            toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                          } else if (Notification.permission === 'default') {
+                            const permission = await Notification.requestPermission()
+                            if (permission === 'granted') {
+                              // Retry getting token after permission granted
+                              const retryToken = await requestNotificationPermission()
+                              if (retryToken) {
+                                toast.success('Push notifications enabled!')
+                              } else {
+                                toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                              }
+                            } else {
+                              toast.error('Notification permission denied')
+                            }
+                          } else {
+                            toast.error('Notifications blocked. Please enable in browser settings.')
+                          }
+                        }
                       }
-                    })
-                    .catch(() => {
-                      toast.error('Failed to enable notifications')
-                    })
-                }}
-                className="p-2 text-gray-600 hover:text-gray-800 flex-shrink-0"
-                title="Enable notifications"
-              >
-                <Bell className="w-5 h-5" />
-              </button>
+                    } catch (error: any) {
+                      console.error('Notification error:', error)
+                      toast.error(`Failed to enable notifications: ${error.message}`)
+                    }
+                  }}
+                  className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 flex-shrink-0"
+                  title="Enable notifications"
+                >
+                  <Bell className="w-5 h-5" />
+                </button>
+                {import.meta.env.DEV && (
+                  <div className="absolute right-0 top-full mt-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await sendTestNotification()
+                          toast.success('Test notification sent!')
+                        } catch (error: any) {
+                          toast.error(error.message || 'Failed to send test notification')
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-primary-600 text-white text-xs rounded-lg shadow-lg whitespace-nowrap"
+                      title="Send immediate test notification"
+                    >
+                      Test Now
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await scheduleDelayedNotification(30)
+                          toast.success('Delayed notification scheduled for 30 seconds! You can close the browser now.')
+                        } catch (error: any) {
+                          toast.error(error.message || 'Failed to schedule delayed notification')
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg shadow-lg whitespace-nowrap"
+                      title="Schedule notification for 30 seconds (works when browser is closed)"
+                    >
+                      Test 30s
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await scheduleDelayedNotification(60)
+                          toast.success('Delayed notification scheduled for 60 seconds! You can close the browser now.')
+                        } catch (error: any) {
+                          toast.error(error.message || 'Failed to schedule delayed notification')
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg shadow-lg whitespace-nowrap"
+                      title="Schedule notification for 60 seconds (works when browser is closed)"
+                    >
+                      Test 1min
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="hidden sm:flex items-center gap-2">
                 {userData?.photoURL && (
                   <img 
@@ -375,7 +612,7 @@ export default function Dashboard() {
                     className="w-8 h-8 rounded-full"
                   />
                 )}
-                <span className="text-sm font-medium text-gray-700">{userData?.displayName || 'User'}</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{userData?.displayName || 'User'}</span>
               </div>
               {userData?.photoURL && (
                 <img 
@@ -388,34 +625,46 @@ export default function Dashboard() {
                 <div className="relative settings-dropdown flex-shrink-0">
                   <button
                     onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    className="p-2 text-gray-600 hover:text-gray-800"
+                    className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
                     title="Settings"
+                    data-tutorial="settings"
                   >
                     <Settings className="w-5 h-5" />
                   </button>
                   {isSettingsOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                      <button
+                        onClick={() => {
+                          setIsUserProfileOpen(true)
+                          setIsSettingsOpen(false)
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <User className="w-4 h-4" />
+                        Profile Settings
+                      </button>
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
                         onClick={() => {
                           setIsManageCategoriesOpen(true)
                           setIsSettingsOpen(false)
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <Tag className="w-4 h-4" />
                         Manage Categories
                       </button>
-                      <div className="border-t border-gray-200 my-2"></div>
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
                         onClick={handleLeaveHousehold}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <LogOut className="w-4 h-4" />
                         Leave Household
                       </button>
                       <button
                         onClick={handleCreateNewHousehold}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                       >
                         <Home className="w-4 h-4" />
                         Create New Household
@@ -426,7 +675,7 @@ export default function Dashboard() {
               )}
               <button
                 onClick={handleSignOut}
-                className="hidden sm:block text-sm text-gray-600 hover:text-gray-800 whitespace-nowrap"
+                className="hidden sm:block text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 whitespace-nowrap"
               >
                 Sign Out
               </button>
@@ -435,24 +684,168 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* Search and Filters Bar */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-16 z-30" data-tutorial="search">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search Bar */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            
+            {/* Sort Dropdown */}
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'dueDate' | 'assignee')}
+                className="px-4 py-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent appearance-none"
+              >
+                <option value="dueDate">Sort by Due Date</option>
+                <option value="assignee">Sort by Assignee</option>
+              </select>
+              <ArrowUpDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+          
+          {/* Quick Filters */}
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button
+              onClick={() => setQuickFilter(quickFilter === 'overdue' ? null : 'overdue')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                quickFilter === 'overdue'
+                  ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              Overdue
+            </button>
+            <button
+              onClick={() => setQuickFilter(quickFilter === 'today' ? null : 'today')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                quickFilter === 'today'
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setQuickFilter(quickFilter === 'upcoming' ? null : 'upcoming')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                quickFilter === 'upcoming'
+                  ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              Upcoming
+            </button>
+            <button
+              onClick={() => setQuickFilter(quickFilter === 'avoiding' ? null : 'avoiding')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                quickFilter === 'avoiding'
+                  ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+              title="Tasks you've been avoiding (missed 2+ times)"
+            >
+              Avoiding
+            </button>
+            <div className="relative flex items-center gap-1">
+              <button
+                onClick={() => setQuickFilter(quickFilter === 'quick' ? null : 'quick')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  quickFilter === 'quick'
+                    ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+                title="Quick tasks (15 minutes or less)"
+              >
+                Quick Tasks
+              </button>
+              <button
+                onMouseEnter={() => setShowQuickTasksInfo(true)}
+                onMouseLeave={() => setShowQuickTasksInfo(false)}
+                onFocus={() => setShowQuickTasksInfo(true)}
+                onBlur={() => setShowQuickTasksInfo(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-0.5"
+                aria-label="Info about Quick Tasks filter"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+              {showQuickTasksInfo && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-50 text-xs">
+                  <div className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    Quick Tasks Filter
+                  </div>
+                  <div className="text-gray-600 dark:text-gray-400 space-y-1">
+                    <p>Shows tasks that can be completed in 15 minutes or less.</p>
+                    <p className="mt-2 font-medium">Includes:</p>
+                    <ul className="list-disc list-inside ml-2 space-y-0.5">
+                      <li>Tasks with estimated duration ≤ 15 minutes</li>
+                      <li>Tasks without an estimated duration set</li>
+                    </ul>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                      💡 Tip: Set estimated duration when creating routines to use this filter effectively.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            {quickFilter && (
+              <button
+                onClick={() => setQuickFilter(null)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-1"
+              >
+                <X className="w-3 h-3" />
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-30">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-[140px] sm:top-[120px] z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1 overflow-x-auto">
+          <div className="flex gap-1 overflow-x-auto" data-tutorial="tabs">
             {tabs.map(tab => {
               const Icon = tab.icon
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors relative ${
                     activeTab === tab.id
-                      ? 'border-primary-600 text-primary-600'
-                      : 'border-transparent text-gray-600 hover:text-gray-800'
+                      ? 'border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400'
+                      : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
+                      activeTab === tab.id
+                        ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -462,14 +855,84 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Smart Insights */}
+        {userData?.householdId && tasks.length > 0 && (
+          <SmartInsights
+            tasks={tasks}
+            routines={routines}
+            categories={categories}
+          />
+        )}
+
+        {/* AI Suggestions */}
+        {userData?.householdId && activeTab !== 'stats' && activeTab !== 'calendar' && (
+          <AISuggestions
+            routines={routines}
+            categories={categories}
+            tasks={tasks}
+            householdId={userData.householdId}
+            onSuggestionSelect={(suggestion) => {
+              // Open create routine modal with suggestion pre-filled
+              setIsModalOpen(true)
+              // Store suggestion to pre-fill form
+              setPendingSuggestion(suggestion)
+            }}
+          />
+        )}
+
+        {/* Clear All Today Button */}
+        {activeTab === 'today' && userData?.householdId && user && (() => {
+          const todayTasks = tasks.filter(t => 
+            isToday(new Date(t.dueDate)) && !t.isCompleted && t.assignedTo === user.uid
+          )
+          const incompleteCount = todayTasks.length
+          
+          if (incompleteCount === 0) return null
+          
+          return (
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    if (!user) {
+                      toast.error('Please sign in to complete tasks')
+                      return
+                    }
+                    
+                    if (window.confirm(`Mark all ${incompleteCount} incomplete task${incompleteCount > 1 ? 's' : ''} assigned to you as complete?`)) {
+                      try {
+                        const promises = todayTasks.map(task => 
+                          completeTask(task.id, user.uid).catch(err => {
+                            console.error(`Error completing task ${task.id}:`, err)
+                            return null
+                          })
+                        )
+                        await Promise.all(promises)
+                        toast.success(`Completed ${incompleteCount} task${incompleteCount > 1 ? 's' : ''}!`)
+                      } catch (error: any) {
+                        console.error('Error completing tasks:', error)
+                        toast.error('Failed to complete some tasks')
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors dark:bg-green-500 dark:hover:bg-green-600"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Clear My Today ({incompleteCount})
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+        
         {/* User Filter */}
         {userData?.householdId && householdUsers.length > 1 && (
           <div className="mb-4 flex items-center gap-3">
-            <label className="text-sm font-medium text-gray-700">Filter by person:</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by person:</label>
             <select
               value={userFilter || ''}
               onChange={(e) => setUserFilter(e.target.value || null)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
             >
               <option value="">All People</option>
               {householdUsers.map(user => (
@@ -481,37 +944,60 @@ export default function Dashboard() {
             {userFilter && (
               <button
                 onClick={() => setUserFilter(null)}
-                className="text-sm text-gray-600 hover:text-gray-800"
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
                 Clear
               </button>
             )}
           </div>
         )}
-        <TaskList
-          tasks={tasks}
-          routines={routines}
-          categories={categories}
-          users={householdUsers}
-          filter={activeTab}
-          currentUserId={user?.uid}
-          userFilter={userFilter}
-        />
+        {activeTab === 'stats' ? (
+          <StatisticsDashboard
+            tasks={tasks}
+            routines={routines}
+            users={householdUsers}
+            currentUserId={user?.uid}
+          />
+        ) : activeTab === 'calendar' ? (
+          <CalendarView
+            tasks={tasks}
+            routines={routines}
+            categories={categories}
+            users={householdUsers}
+            onTaskClick={(task) => {
+              // Could open task edit modal here
+              console.log('Task clicked:', task)
+            }}
+            onDayClick={(date) => {
+              setSelectedDate(date)
+              setIsDayTasksModalOpen(true)
+            }}
+          />
+        ) : (
+          <TaskList
+            tasks={tasks}
+            routines={routines}
+            categories={categories}
+            users={householdUsers}
+            filter={activeTab}
+            currentUserId={user?.uid}
+            userFilter={userFilter}
+            searchQuery={searchQuery}
+            sortBy={sortBy}
+            quickFilter={quickFilter}
+          />
+        )}
       </main>
-
-      {/* Floating Action Button */}
-      <button
-        onClick={() => setIsModalOpen(true)}
-        className="fixed bottom-8 right-8 bg-primary-600 text-white p-4 rounded-full shadow-lg hover:bg-primary-700 transition-colors z-50"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
 
       {userData?.householdId && (
         <CreateRoutineModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={() => {
+            setIsModalOpen(false)
+            setPendingSuggestion(null)
+          }}
           householdId={userData.householdId}
+          initialSuggestion={pendingSuggestion}
         />
       )}
 
@@ -548,6 +1034,43 @@ export default function Dashboard() {
           householdId={userData.householdId}
         />
       )}
+
+      <UserProfileModal
+        isOpen={isUserProfileOpen}
+        onClose={() => setIsUserProfileOpen(false)}
+      />
+
+      <DayTasksModal
+        isOpen={isDayTasksModalOpen}
+        onClose={() => {
+          setIsDayTasksModalOpen(false)
+          setSelectedDate(null)
+        }}
+        date={selectedDate}
+        tasks={tasks}
+        routines={routines}
+        categories={categories}
+        users={householdUsers}
+      />
+
+      {/* Floating Action Button for Quick Add */}
+      {userData?.householdId && activeTab !== 'stats' && activeTab !== 'calendar' && (
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="fixed bottom-6 right-6 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all z-40 flex items-center justify-center group"
+          title="Create new routine (N)"
+          data-tutorial="create-button"
+        >
+          <Plus className="w-6 h-6" />
+          <span className="ml-2 hidden sm:inline font-medium">New Routine</span>
+        </button>
+      )}
+
+      {/* Install Prompt */}
+      <InstallPrompt />
+
+      {/* Tutorial */}
+      <Tutorial />
     </div>
   )
 }
