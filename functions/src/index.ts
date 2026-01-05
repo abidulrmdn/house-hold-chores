@@ -69,7 +69,7 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
     })
   }
 
-  const { routines, categories, tasks, language = 'en' } = data
+  const { routines, categories, tasks, language = 'en', selectedAreas = [] } = data
 
   if (!genAI) {
     throw new functions.https.HttpsError('failed-precondition', 'Gemini API not configured')
@@ -87,12 +87,28 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
     const totalTasks = tasks.length
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
+    // Map area IDs to readable names
+    const areaNameMap: Record<string, string> = {
+      'kitchen': 'kitchen',
+      'bathroom': 'bathroom',
+      'bedroom': 'bedroom',
+      'living-room': 'living room',
+      'laundry': 'laundry room',
+      'garage': 'garage',
+      'outdoor': 'outdoor'
+    }
+    const selectedAreaNames = selectedAreas.map((id: string) => areaNameMap[id] || id).join(', ')
+
     // Language instruction
     const languageInstruction = language === 'ar' 
       ? 'IMPORTANT: Respond in Arabic. All task names, categories, and reasons must be in Arabic.'
       : language === 'nl'
       ? 'IMPORTANT: Respond in Dutch. All task names, categories, and reasons must be in Dutch.'
       : 'IMPORTANT: Respond in English. All task names, categories, and reasons must be in English.'
+
+    const areasContext = selectedAreas.length > 0 
+      ? `The user has selected these household areas: ${selectedAreaNames}. Focus your suggestions on tasks for these specific areas.`
+      : 'Consider tasks for different household areas (kitchen, bathroom, bedroom, living room, outdoor, garage, laundry).'
 
     const prompt = `You are a helpful AI assistant for a household routine management app.
 
@@ -101,12 +117,13 @@ ${languageInstruction}
 Current household routines: ${routineNames || 'None yet'}
 Existing categories: ${categoryNames || 'None yet'}
 Task completion rate: ${completionRate}%
+${areasContext}
 
 Based on this information, suggest 8-20 new household tasks/routines that would be useful. Consider:
 1. Common household maintenance tasks (cleaning, organizing, maintenance)
 2. Tasks that complement existing routines
 3. Seasonal tasks if relevant
-4. Tasks for different household areas (kitchen, bathroom, bedroom, living room, outdoor, garage, laundry)
+4. ${selectedAreas.length > 0 ? `Tasks specifically for the selected areas: ${selectedAreaNames}` : 'Tasks for different household areas (kitchen, bathroom, bedroom, living room, outdoor, garage, laundry)'}
 5. Tasks that are commonly missed or forgotten
 6. Deep cleaning tasks that are done less frequently
 7. Organizational tasks

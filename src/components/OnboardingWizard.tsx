@@ -148,7 +148,8 @@ export default function OnboardingWizard({ isOpen, onClose, onComplete }: Onboar
           routines,
           categories,
           [],
-          household?.id || ''
+          household?.id || '',
+          selectedAreas // Pass selected areas to focus AI suggestions
         )
         suggestions = result || []
       } catch (error: any) {

@@ -375,6 +375,7 @@
       "bathroom": "Badkamer",
       "bedroom": "Slaapkamer",
       "livingRoom": "Woonkamer",
+      "living-room": "Woonkamer",
       "laundry": "Wasruimte",
       "garage": "Garage",
       "outdoor": "Buiten",
@@ -385,6 +386,7 @@
       "bathroom": ["Toilet schoonmaken", "Douche schrobben", "Spiegels schoonmaken", "Medicijnkastje organiseren", "Handdoeken vervangen"],
       "bedroom": ["Beddengoed verschonen", "Kast organiseren", "Meubels afstoffen", "Vloer stofzuigen", "Ramen schoonmaken"],
       "livingRoom": ["Tapijt stofzuigen", "Oppervlakken afstoffen", "Boeken organiseren", "Ramen schoonmaken", "Kussens opschudden"],
+      "living-room": ["Tapijt stofzuigen", "Oppervlakken afstoffen", "Boeken organiseren", "Ramen schoonmaken", "Kussens opschudden"],
       "laundry": ["Kleding wassen", "Wasmachine vouwen", "Wasbenodigdheden organiseren", "Wasmachine schoonmaken", "Kleding sorteren"],
       "garage": ["Gereedschap organiseren", "Auto schoonmaken", "Vloer vegen", "Opslag organiseren", "Auto-onderhoud controleren"],
       "outdoor": ["Gras maaien", "Planten water geven", "Bladeren harken", "Terrassen schoonmaken", "Heggen snoeien"]

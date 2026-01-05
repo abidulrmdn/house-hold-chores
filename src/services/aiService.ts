@@ -37,7 +37,8 @@ export async function getTaskSuggestions(
   routines: any[],
   categories: any[],
   tasks: any[],
-  householdId: string
+  householdId: string,
+  selectedAreas?: string[]
 ): Promise<TaskSuggestion[]> {
   if (!aiFunctions) {
     throw new Error('Firebase Functions not initialized')
@@ -51,7 +52,8 @@ export async function getTaskSuggestions(
       categories,
       tasks,
       householdId,
-      language
+      language,
+      selectedAreas: selectedAreas || []
     })
 
     return (result.data as any).suggestions || []

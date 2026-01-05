@@ -375,6 +375,7 @@
       "bathroom": "Bathroom",
       "bedroom": "Bedroom",
       "livingRoom": "Living Room",
+      "living-room": "Living Room",
       "laundry": "Laundry Room",
       "garage": "Garage",
       "outdoor": "Outdoor",
@@ -385,6 +386,7 @@
       "bathroom": ["Clean toilet", "Scrub shower", "Clean mirrors", "Organize medicine cabinet", "Replace towels"],
       "bedroom": ["Change bed sheets", "Organize closet", "Dust furniture", "Vacuum floor", "Clean windows"],
       "livingRoom": ["Vacuum carpet", "Dust surfaces", "Organize books", "Clean windows", "Fluff pillows"],
+      "living-room": ["Vacuum carpet", "Dust surfaces", "Organize books", "Clean windows", "Fluff pillows"],
       "laundry": ["Wash clothes", "Fold laundry", "Organize laundry supplies", "Clean washing machine", "Sort clothes"],
       "garage": ["Organize tools", "Clean car", "Sweep floor", "Organize storage", "Check car maintenance"],
       "outdoor": ["Mow lawn", "Water plants", "Rake leaves", "Clean patio", "Trim hedges"]
