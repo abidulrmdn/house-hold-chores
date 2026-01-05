@@ -164,8 +164,8 @@ Return ONLY a JSON array in this exact format:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
-    // Use gemini-1.5-flash (current recommended model, fastest and cheapest)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // Use gemini-2.5-flash (latest working model - tested and verified)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
     const result = await model.generateContent(prompt)
     const response = result.response
     const text = response.text()
@@ -376,8 +376,8 @@ Return ONLY a JSON object in this exact format:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON object.`
 
-    // Use gemini-1.5-flash (current recommended model, fastest and cheapest)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // Use gemini-2.5-flash (latest working model - tested and verified)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
     const result = await model.generateContent(prompt)
     const response = result.response
     const text = response.text()
@@ -483,8 +483,8 @@ Return ONLY a JSON array of strings:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
-    // Use gemini-1.5-flash (current recommended model, fastest and cheapest)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // Use gemini-2.5-flash (latest working model - tested and verified)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
     const result = await model.generateContent(prompt)
     const response = result.response
     const text = response.text()
