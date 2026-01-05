@@ -71,12 +71,31 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
 
   const { routines, categories, tasks, language = 'en', selectedAreas = [] } = data
 
-  if (!genAI) {
+  // Log incoming data for debugging
+  console.log('=== generateTaskSuggestions called ===')
+  console.log('Input data:', {
+    routinesCount: routines?.length || 0,
+    categoriesCount: categories?.length || 0,
+    tasksCount: tasks?.length || 0,
+    language,
+    selectedAreasCount: selectedAreas?.length || 0,
+    selectedAreas: selectedAreas || []
+  })
+
+  // Check if Gemini API is configured
+  const apiKey = functions.config().gemini?.api_key || process.env.GEMINI_API_KEY
+  if (!apiKey || apiKey === '') {
+    console.error('Gemini API key not configured')
     throw new functions.https.HttpsError('failed-precondition', 'Gemini API not configured')
   }
 
+  if (!genAI) {
+    console.error('genAI not initialized')
+    throw new functions.https.HttpsError('failed-precondition', 'Gemini API not initialized')
+  }
+
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     // Get existing routine names and categories
     const routineNames = routines.map((r: Routine) => r.name).join(', ')
@@ -151,12 +170,35 @@ Do not include any markdown formatting, code blocks, or extra text. Just the JSO
     const response = result.response
     const text = response.text()
 
+    // Check if response is empty
+    if (!text || text.trim().length === 0) {
+      console.error('AI returned empty response')
+      console.error('Response object:', JSON.stringify(response, null, 2))
+      return { suggestions: [] }
+    }
+
+    // Log the raw response for debugging
+    console.log('Raw AI response length:', text.length)
+    console.log('Raw AI response (first 1000 chars):', text.substring(0, 1000))
+
     // Parse JSON from response (remove markdown code blocks if present)
     let jsonText = text.trim()
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/```\n?/g, '')
+    
+    // Remove markdown code blocks
+    if (jsonText.includes('```json')) {
+      const jsonBlockMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/)
+      if (jsonBlockMatch) {
+        jsonText = jsonBlockMatch[1].trim()
+      } else {
+        jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
+      }
+    } else if (jsonText.includes('```')) {
+      const codeBlockMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/)
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1].trim()
+      } else {
+        jsonText = jsonText.replace(/```\n?/g, '')
+      }
     }
 
     // Try to extract JSON array from the response
@@ -164,32 +206,65 @@ Do not include any markdown formatting, code blocks, or extra text. Just the JSO
     const jsonMatch = jsonText.match(/\[[\s\S]*\]/)
     if (jsonMatch) {
       jsonText = jsonMatch[0]
+    } else {
+      // If no array found, try to find any JSON structure
+      const anyJsonMatch = jsonText.match(/\{[\s\S]*\}/)
+      if (anyJsonMatch) {
+        console.warn('Found JSON object instead of array, wrapping in array')
+        jsonText = `[${anyJsonMatch[0]}]`
+      }
     }
+
+    console.log('Extracted JSON text:', jsonText.substring(0, 500)) // Log first 500 chars
 
     let suggestions: TaskSuggestion[]
     try {
       suggestions = JSON.parse(jsonText)
     } catch (parseError: any) {
-      console.error('Failed to parse AI response:', parseError)
-      console.error('Response text:', text)
+      console.error('Failed to parse AI response:', parseError.message)
+      console.error('Full response text length:', text.length)
+      console.error('Full response text:', text)
+      console.error('Cleaned JSON text length:', jsonText.length)
       console.error('Cleaned JSON text:', jsonText)
       
-      // Return empty array instead of throwing error - fallback will handle it
-      console.warn('Returning empty suggestions array due to parse error')
-      return { suggestions: [] }
+      // Try to fix common JSON issues
+      try {
+        // Try removing trailing commas
+        const fixedJson = jsonText.replace(/,(\s*[}\]])/g, '$1')
+        suggestions = JSON.parse(fixedJson)
+        console.log('Successfully parsed after fixing trailing commas')
+      } catch (secondTry: any) {
+        console.error('Second parse attempt also failed:', secondTry.message)
+        // Return empty array instead of throwing error - fallback will handle it
+        console.warn('Returning empty suggestions array due to parse error')
+        return { suggestions: [] }
+      }
     }
 
     // Validate suggestions format
     if (!Array.isArray(suggestions)) {
-      console.error('AI response is not an array:', suggestions)
+      console.error('AI response is not an array:', typeof suggestions)
+      console.error('Response value:', suggestions)
       console.error('Response text:', text)
-      // Return empty array instead of throwing error
-      return { suggestions: [] }
+      // Try to wrap in array if it's an object
+      if (typeof suggestions === 'object' && suggestions !== null) {
+        console.log('Wrapping object in array')
+        suggestions = [suggestions]
+      } else {
+        // Return empty array instead of throwing error
+        return { suggestions: [] }
+      }
     }
 
     // Validate and filter suggestions
     const validSuggestions = suggestions
-      .filter((s: any) => s && s.name && typeof s.name === 'string')
+      .filter((s: any) => {
+        const isValid = s && s.name && typeof s.name === 'string'
+        if (!isValid) {
+          console.warn('Filtered out invalid suggestion:', s)
+        }
+        return isValid
+      })
       .map((s: any) => ({
         name: s.name.trim(),
         frequency: s.frequency || 'weekly',
@@ -197,6 +272,12 @@ Do not include any markdown formatting, code blocks, or extra text. Just the JSO
         reason: s.reason || 'Useful household task'
       }))
       .slice(0, 20) // Limit to 20 suggestions max
+
+    console.log(`Successfully parsed ${validSuggestions.length} valid suggestions from ${suggestions.length} total`)
+    
+    if (validSuggestions.length === 0) {
+      console.warn('No valid suggestions after filtering. Original suggestions:', suggestions)
+    }
 
     return { suggestions: validSuggestions }
   } catch (error: any) {
@@ -266,7 +347,7 @@ export const parseTaskInput = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     // Language instruction
     const languageInstruction = language === 'ar' 
@@ -372,7 +453,7 @@ export const generateInsights = functions.https.onCall(async (data, context) => 
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     // Language instruction
     const languageInstruction = language === 'ar' 
