@@ -2,14 +2,15 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js')
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js')
 
-// Initialize Firebase (use your config)
+// Initialize Firebase
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAx59ISocT3_RNYhvIuPRsdNjKcyoQOLZQ",
+  authDomain: "household-chores-d8eae.firebaseapp.com",
+  projectId: "household-chores-d8eae",
+  storageBucket: "household-chores-d8eae.firebasestorage.app",
+  messagingSenderId: "590220309328",
+  appId: "1:590220309328:web:efa1818f860d166ee6f255",
+  measurementId: "G-D31RXV6JNR"
 }
 
 firebase.initializeApp(firebaseConfig)
@@ -28,4 +29,3 @@ messaging.onBackgroundMessage((payload) => {
 
   self.registration.showNotification(notificationTitle, notificationOptions)
 })
-

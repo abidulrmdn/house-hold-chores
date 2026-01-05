@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Plus, Calendar, CheckSquare, User, Bell, Home } from 'lucide-react'
+import { Plus, Calendar, CheckSquare, User, Bell, Home, Users } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
 import TaskList from '@/components/TaskList'
 import CreateRoutineModal from '@/components/CreateRoutineModal'
+import InviteModal from '@/components/InviteModal'
+import JoinHouseholdModal from '@/components/JoinHouseholdModal'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/firebase/config'
 import { requestNotificationPermission } from '@/firebase/config'
@@ -26,6 +28,22 @@ export default function Dashboard() {
   const { household, createHousehold, loadHousehold } = useHouseholdStore()
   const [householdName, setHouseholdName] = useState('')
   const [isCreatingHousehold, setIsCreatingHousehold] = useState(false)
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
+  const [joinHouseholdId, setJoinHouseholdId] = useState<string | null>(null)
+
+  // Check URL for join parameter
+  useEffect(() => {
+    const path = window.location.pathname
+    const joinMatch = path.match(/\/join\/(.+)/)
+    if (joinMatch && joinMatch[1]) {
+      const householdId = joinMatch[1]
+      setJoinHouseholdId(householdId)
+      setIsJoinModalOpen(true)
+      // Clean up URL
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
 
   useEffect(() => {
     if (userData?.householdId) {
@@ -40,7 +58,9 @@ export default function Dashboard() {
 
     fetchRoutines(userData.householdId)
     fetchCategories(userData.householdId)
-    const unsubscribe = subscribeToTasks(userData.householdId, activeTab === 'my-tasks' ? user?.uid : undefined)
+    // Don't filter by user for 'week' and 'today' tabs - show all household tasks
+    const shouldFilterByUser = activeTab === 'my-tasks'
+    const unsubscribe = subscribeToTasks(userData.householdId, shouldFilterByUser ? user?.uid : undefined)
 
     // Check for missed tasks periodically
     const interval = setInterval(() => {
@@ -65,6 +85,10 @@ export default function Dashboard() {
 
   const handleSignOut = async () => {
     try {
+      if (!auth) {
+        toast.error('Not authenticated')
+        return
+      }
       await signOut(auth)
       setUser(null)
       toast.success('Signed out successfully')
@@ -78,54 +102,100 @@ export default function Dashboard() {
     
     setIsCreatingHousehold(true)
     try {
-      const householdId = await createHousehold(householdName.trim(), user.uid)
+      await createHousehold(householdName.trim(), user.uid)
       await loadUserData()
       toast.success('Household created!')
       setHouseholdName('')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating household:', error)
-      toast.error('Failed to create household')
+      const errorMessage = error.message || 'Failed to create household'
+      toast.error(errorMessage)
+      
+      // Show helpful message if Firestore not created
+      if (errorMessage.includes('Permission denied') || 
+          errorMessage.includes('not found') || 
+          errorMessage.includes('not initialized')) {
+        toast.error('Please create Firestore database in Firebase Console first!', {
+          duration: 5000
+        })
+      }
     } finally {
       setIsCreatingHousehold(false)
     }
   }
 
-  if (!userData?.householdId) {
+  // Show household setup screen if user doesn't have a household
+  // Show it even if userData is still loading (user is authenticated)
+  if (user && !userData?.householdId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-          <div className="text-center mb-8">
-            <Home className="w-16 h-16 text-primary-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome!</h2>
-            <p className="text-gray-600">Set up your household to get started</p>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Household Name
-              </label>
-              <input
-                type="text"
-                value={householdName}
-                onChange={(e) => setHouseholdName(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleCreateHousehold()}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="e.g., The Smiths"
-                autoFocus
-              />
+      <>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+            <div className="text-center mb-8">
+              <Home className="w-16 h-16 text-primary-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome!</h2>
+              <p className="text-gray-600">Set up your household to get started</p>
             </div>
             
-            <button
-              onClick={handleCreateHousehold}
-              disabled={!householdName.trim() || isCreatingHousehold}
-              className="w-full bg-primary-600 text-white py-2.5 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreatingHousehold ? 'Creating...' : 'Create Household'}
-            </button>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Household Name
+                </label>
+                <input
+                  type="text"
+                  value={householdName}
+                  onChange={(e) => setHouseholdName(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleCreateHousehold()}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="e.g., The Smiths"
+                  autoFocus={!isJoinModalOpen}
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateHousehold}
+                  disabled={!householdName.trim() || isCreatingHousehold}
+                  className="flex-1 bg-primary-600 text-white py-2.5 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreatingHousehold ? 'Creating...' : 'Create Household'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (!user) {
+                      toast.error('Please sign in first')
+                      return
+                    }
+                    console.log('Opening join modal')
+                    setIsJoinModalOpen(true)
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  Join Existing
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+        
+        {/* Render join modal even on welcome screen */}
+        <JoinHouseholdModal
+          isOpen={isJoinModalOpen}
+          onClose={() => {
+            setIsJoinModalOpen(false)
+            setJoinHouseholdId(null)
+          }}
+          onSuccess={async () => {
+            console.log('Join success callback - reloading user data')
+            await loadUserData()
+            toast.success('Redirecting to dashboard...')
+            setJoinHouseholdId(null)
+          }}
+          initialHouseholdId={joinHouseholdId}
+        />
+      </>
     )
   }
 
@@ -144,6 +214,16 @@ export default function Dashboard() {
           <div className="flex items-center justify-between h-16">
             <h1 className="text-2xl font-bold text-primary-700">Routine Manager</h1>
             <div className="flex items-center gap-4">
+              {userData?.householdId && (
+                <button
+                  onClick={() => setIsInviteModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                  title="Invite to household"
+                >
+                  <Users className="w-4 h-4" />
+                  Invite
+                </button>
+              )}
               <button
                 onClick={() => requestNotificationPermission().then(() => toast.success('Notifications enabled!'))}
                 className="p-2 text-gray-600 hover:text-gray-800"
@@ -152,14 +232,14 @@ export default function Dashboard() {
                 <Bell className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-2">
-                {userData.photoURL && (
+                {userData?.photoURL && (
                   <img 
                     src={userData.photoURL} 
                     alt={userData.displayName}
                     className="w-8 h-8 rounded-full"
                   />
                 )}
-                <span className="text-sm font-medium text-gray-700">{userData.displayName}</span>
+                <span className="text-sm font-medium text-gray-700">{userData?.displayName || 'User'}</span>
               </div>
               <button
                 onClick={handleSignOut}
@@ -217,10 +297,38 @@ export default function Dashboard() {
         <Plus className="w-6 h-6" />
       </button>
 
-      <CreateRoutineModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        householdId={userData.householdId}
+      {userData?.householdId && (
+        <CreateRoutineModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          householdId={userData.householdId}
+        />
+      )}
+
+      {household && (
+        <InviteModal
+          isOpen={isInviteModalOpen}
+          onClose={() => setIsInviteModalOpen(false)}
+          householdId={household.id}
+          householdName={household.name}
+        />
+      )}
+
+      <JoinHouseholdModal
+        isOpen={isJoinModalOpen}
+        onClose={() => {
+          setIsJoinModalOpen(false)
+          setJoinHouseholdId(null)
+        }}
+        onSuccess={async () => {
+          // Reload user data after joining
+          console.log('Join success callback - reloading user data')
+          await loadUserData()
+          // The useEffect will automatically reload household data
+          toast.success('Redirecting to dashboard...')
+          setJoinHouseholdId(null)
+        }}
+        initialHouseholdId={joinHouseholdId}
       />
     </div>
   )

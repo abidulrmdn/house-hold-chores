@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { Routine, Frequency, Category } from '@/types'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useAuthStore } from '@/store/useAuthStore'
+import { useHouseholdStore } from '@/store/useHouseholdStore'
 import toast from 'react-hot-toast'
 
 interface CreateRoutineModalProps {
@@ -31,8 +32,58 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
   const [categoryName, setCategoryName] = useState('')
   const [categoryColor, setCategoryColor] = useState(COLORS[0])
   const [assignedTo, setAssignedTo] = useState<string[]>([])
+  const [startDate, setStartDate] = useState('')
+  const [householdMembers, setHouseholdMembers] = useState<any[]>([])
   const { createRoutine, createCategory, categories, fetchCategories } = useRoutineStore()
   const { userData } = useAuthStore()
+  const { household } = useHouseholdStore()
+
+  useEffect(() => {
+    if (isOpen && householdId) {
+      fetchCategories(householdId)
+      fetchHouseholdMembers()
+    }
+  }, [isOpen, householdId])
+
+  const fetchHouseholdMembers = async () => {
+    if (!household?.members || !household.members.length) {
+      // If no members, at least show current user
+      if (userData) {
+        setHouseholdMembers([userData])
+      }
+      return
+    }
+    try {
+      const { doc, getDoc } = await import('firebase/firestore')
+      const { db } = await import('@/firebase/config')
+      if (!db) {
+        if (userData) {
+          setHouseholdMembers([userData])
+        }
+        return
+      }
+      
+      const memberPromises = household.members.map(async (memberId) => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', memberId))
+          if (userDoc.exists()) {
+            return { id: userDoc.id, ...userDoc.data() }
+          }
+          return null
+        } catch (error) {
+          console.error(`Error fetching user ${memberId}:`, error)
+          return null
+        }
+      })
+      const members = (await Promise.all(memberPromises)).filter(Boolean)
+      setHouseholdMembers(members.length > 0 ? members : (userData ? [userData] : []))
+    } catch (error) {
+      console.error('Error fetching household members:', error)
+      if (userData) {
+        setHouseholdMembers([userData])
+      }
+    }
+  }
 
   if (!isOpen) return null
 
@@ -66,7 +117,8 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
         assignedTo: assignedTo.length > 0 ? assignedTo : [userData.id],
         householdId,
         createdBy: userData.id,
-        isActive: true
+        isActive: true,
+        startDate: startDate ? new Date(startDate).getTime() : undefined
       })
 
       toast.success('Routine created!')
@@ -76,6 +128,7 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
       setCategoryId('')
       setCategoryName('')
       setAssignedTo([])
+      setStartDate('')
     } catch (error) {
       console.error('Error creating routine:', error)
       toast.error('Failed to create routine')
@@ -143,15 +196,19 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Category
+              Category *
             </label>
             <select
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              onChange={(e) => {
+                setCategoryId(e.target.value)
+                setCategoryName('') // Clear new category name when selecting existing
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
+              required
             >
               <option value="">Select existing category</option>
-              {categories.map(cat => (
+              {categories.filter(cat => cat.householdId === householdId).map(cat => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}
                 </option>
@@ -182,6 +239,57 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
                 ))}
               </div>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Assign To
+            </label>
+            <div className="space-y-2">
+              {householdMembers.length > 0 ? (
+                householdMembers.map(member => (
+                  <label key={member.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={assignedTo.includes(member.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setAssignedTo([...assignedTo, member.id])
+                        } else {
+                          setAssignedTo(assignedTo.filter(id => id !== member.id))
+                        }
+                      }}
+                      className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {member.displayName || member.email || member.id}
+                      {member.id === userData?.id && ' (You)'}
+                    </span>
+                  </label>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No other members in household</p>
+              )}
+            </div>
+            {assignedTo.length === 0 && (
+              <p className="text-xs text-gray-500 mt-1">If none selected, will be assigned to you</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Start Date (Optional)
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              First task will start from this date. If not set, starts from today.
+            </p>
           </div>
 
           <div className="flex gap-4">

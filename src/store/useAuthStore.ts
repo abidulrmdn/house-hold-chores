@@ -34,14 +34,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ userData: userDoc.data() as User, loading: false })
       } else {
         // Create user document if it doesn't exist
-        const newUserData: User = {
+        const userData: any = {
           id: user.uid,
           email: user.email || '',
           displayName: user.displayName || user.email?.split('@')[0] || 'User',
-          photoURL: user.photoURL || undefined,
           createdAt: Date.now()
         }
-        await setDoc(doc(db, 'users', user.uid), newUserData)
+        // Only add photoURL if it exists (Firestore doesn't allow undefined)
+        if (user.photoURL) {
+          userData.photoURL = user.photoURL
+        }
+        await setDoc(doc(db, 'users', user.uid), userData)
         set({ userData: newUserData, loading: false })
       }
     } catch (error) {

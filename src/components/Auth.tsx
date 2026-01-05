@@ -12,6 +12,10 @@ export default function Auth() {
   const { setUser, loadUserData } = useAuthStore()
 
   useEffect(() => {
+    if (!auth) {
+      console.warn('Auth not available - Firebase not configured')
+      return
+    }
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setUser(user)
       if (user) {
@@ -19,10 +23,14 @@ export default function Auth() {
       }
     })
     return unsubscribe
-  }, [setUser, loadUserData])
+  }, [setUser, loadUserData, auth])
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!auth) {
+      alert('Firebase is not configured. Please set up your .env file. See README.md for instructions.')
+      return
+    }
     setLoading(true)
     try {
       if (isLogin) {
@@ -38,6 +46,10 @@ export default function Auth() {
   }
 
   const handleGoogleAuth = async () => {
+    if (!auth || !googleProvider) {
+      alert('Firebase is not configured. Please set up your .env file. See README.md for instructions.')
+      return
+    }
     setLoading(true)
     try {
       await signInWithPopup(auth, googleProvider)

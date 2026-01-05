@@ -77,16 +77,15 @@ export default function SwipeableTaskCard({
       onDragEnd={handleDragEnd}
       className={`relative ${getStatusColor()} border-2 rounded-xl p-4 mb-3 cursor-grab active:cursor-grabbing`}
     >
-      {!task.isCompleted && (
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-          <div className="bg-green-500 rounded-full p-2">
-            <Check className="w-6 h-6 text-white" />
-          </div>
-        </div>
-      )}
-
       <div className="flex items-start justify-between">
-        <div className="flex-1">
+        <div className="flex-1 pl-12">
+          {!task.isCompleted && (
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
+              <div className="bg-green-500 rounded-full p-2">
+                <Check className="w-5 h-5 text-white" />
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-1">
             <div 
               className="w-3 h-3 rounded-full"

@@ -111,7 +111,7 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
   },
 
-  createRoutine: async (routineData) => {
+  createRoutine: async (routineData: Omit<Routine, 'id' | 'createdAt'> & { startDate?: number }) => {
     try {
       const routine: Omit<Routine, 'id'> = {
         ...routineData,
@@ -120,7 +120,7 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
       const docRef = await addDoc(collection(db, 'routines'), routine)
       
       // Create initial task instances for the next period
-      await get().generateTaskInstances(docRef.id, routineData)
+      await get().generateTaskInstances(docRef.id, routineData, routineData.startDate)
       
       return docRef.id
     } catch (error) {
@@ -129,10 +129,11 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
   },
 
-  generateTaskInstances: async (routineId: string, routine: Omit<Routine, 'id' | 'createdAt'> | Routine) => {
+  generateTaskInstances: async (routineId: string, routine: Omit<Routine, 'id' | 'createdAt'> | Routine, startDate?: number) => {
     const routineData = routine as Routine
     
-    const now = new Date()
+    // Use startDate if provided, otherwise start from today
+    const start = startDate ? new Date(startDate) : new Date()
     const instances: Omit<TaskInstance, 'id'>[] = []
 
     // Generate tasks for the next 3 periods
@@ -141,16 +142,16 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
       
       switch (routineData.frequency) {
         case 'daily':
-          dueDate = addDays(now, i + 1)
+          dueDate = addDays(start, i)
           break
         case 'weekly':
-          dueDate = addWeeks(now, i + 1)
+          dueDate = addWeeks(start, i)
           break
         case 'biweekly':
-          dueDate = addWeeks(now, (i + 1) * 2)
+          dueDate = addWeeks(start, i * 2)
           break
         case 'monthly':
-          dueDate = addMonths(now, i + 1)
+          dueDate = addMonths(start, i)
           break
       }
 

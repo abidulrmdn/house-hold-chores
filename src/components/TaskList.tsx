@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { TaskInstance, Routine, Category, User } from '@/types'
 import SwipeableTaskCard from './SwipeableTaskCard'
-import { format, startOfDay, isToday, isThisWeek, isPast } from 'date-fns'
+import { format, startOfDay, isToday, isThisWeek, isPast, startOfWeek, endOfWeek } from 'date-fns'
 
 interface TaskListProps {
   tasks: TaskInstance[]
@@ -32,7 +32,14 @@ export default function TaskList({
     if (filter === 'today') {
       filtered = filtered.filter(task => isToday(new Date(task.dueDate)))
     } else if (filter === 'week') {
-      filtered = filtered.filter(task => isThisWeek(new Date(task.dueDate)))
+      // Use startOfWeek and endOfWeek for more accurate week filtering
+      const now = new Date()
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 }) // Monday
+      const weekEnd = endOfWeek(now, { weekStartsOn: 1 }) // Sunday
+      filtered = filtered.filter(task => {
+        const taskDate = new Date(task.dueDate)
+        return taskDate >= weekStart && taskDate <= weekEnd
+      })
     }
 
     // Sort: incomplete first, then by due date
