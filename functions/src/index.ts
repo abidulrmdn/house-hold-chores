@@ -95,9 +95,6 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
   }
 
   try {
-    // Use gemini-pro model (most compatible)
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
-
     // Get existing routine names and categories
     const routineNames = routines.map((r: Routine) => r.name).join(', ')
     const categoryNames = categories.map((c: any) => c.name).join(', ')
@@ -168,27 +165,33 @@ Return ONLY a JSON array in this exact format:
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
     let result, response, text
-    try {
-      result = await model.generateContent(prompt)
-      response = result.response
-      text = response.text()
-    } catch (apiError: any) {
-      console.error('Gemini API error:', apiError.message)
-      // If model not found, try alternative
-      if (apiError.message?.includes('not found') || apiError.message?.includes('404')) {
-        console.log('Trying alternative model: gemini-1.5-pro')
-        try {
-          const altModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
-          result = await altModel.generateContent(prompt)
-          response = result.response
-          text = response.text()
-        } catch (altError: any) {
-          console.error('Alternative model also failed:', altError.message)
-          throw new functions.https.HttpsError('failed-precondition', `Gemini API error: ${apiError.message}. Please check your API key and model availability.`)
-        }
-      } else {
-        throw apiError
+    const modelNames = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+    let lastError: any = null
+    
+    for (const modelName of modelNames) {
+      try {
+        console.log(`Trying model: ${modelName}`)
+        const currentModel = genAI.getGenerativeModel({ model: modelName })
+        result = await currentModel.generateContent(prompt)
+        response = result.response
+        text = response.text()
+        console.log(`Successfully used model: ${modelName}`)
+        break // Success, exit loop
+      } catch (apiError: any) {
+        console.error(`Model ${modelName} failed:`, apiError.message)
+        lastError = apiError
+        // Continue to next model
+        continue
       }
+    }
+    
+    // If all models failed, throw error
+    if (!text) {
+      console.error('All models failed. Last error:', lastError?.message)
+      throw new functions.https.HttpsError(
+        'failed-precondition', 
+        `Gemini API error: All model attempts failed. Last error: ${lastError?.message || 'Unknown error'}. Please check your API key and model availability.`
+      )
     }
 
     // Check if response is empty
@@ -368,9 +371,6 @@ export const parseTaskInput = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    // Use gemini-pro model (most compatible)
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
-
     // Language instruction
     const languageInstruction = language === 'ar' 
       ? 'IMPORTANT: Respond in Arabic. All task names and categories must be in Arabic.'
@@ -401,27 +401,33 @@ Return ONLY a JSON object in this exact format:
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON object.`
 
     let result, response, text
-    try {
-      result = await model.generateContent(prompt)
-      response = result.response
-      text = response.text()
-    } catch (apiError: any) {
-      console.error('Gemini API error:', apiError.message)
-      // If model not found, try alternative
-      if (apiError.message?.includes('not found') || apiError.message?.includes('404')) {
-        console.log('Trying alternative model: gemini-1.5-pro')
-        try {
-          const altModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
-          result = await altModel.generateContent(prompt)
-          response = result.response
-          text = response.text()
-        } catch (altError: any) {
-          console.error('Alternative model also failed:', altError.message)
-          throw new functions.https.HttpsError('failed-precondition', `Gemini API error: ${apiError.message}. Please check your API key and model availability.`)
-        }
-      } else {
-        throw apiError
+    const modelNames = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+    let lastError: any = null
+    
+    for (const modelName of modelNames) {
+      try {
+        console.log(`Trying model: ${modelName}`)
+        const currentModel = genAI.getGenerativeModel({ model: modelName })
+        result = await currentModel.generateContent(prompt)
+        response = result.response
+        text = response.text()
+        console.log(`Successfully used model: ${modelName}`)
+        break // Success, exit loop
+      } catch (apiError: any) {
+        console.error(`Model ${modelName} failed:`, apiError.message)
+        lastError = apiError
+        // Continue to next model
+        continue
       }
+    }
+    
+    // If all models failed, throw error
+    if (!text) {
+      console.error('All models failed. Last error:', lastError?.message)
+      throw new functions.https.HttpsError(
+        'failed-precondition', 
+        `Gemini API error: All model attempts failed. Last error: ${lastError?.message || 'Unknown error'}. Please check your API key and model availability.`
+      )
     }
 
     // Parse JSON from response
@@ -480,9 +486,6 @@ export const generateInsights = functions.https.onCall(async (data, context) => 
   }
 
   try {
-    // Use gemini-pro model (most compatible)
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
-
     // Language instruction
     const languageInstruction = language === 'ar' 
       ? 'IMPORTANT: Respond in Arabic. All insights must be in Arabic.'
@@ -529,27 +532,33 @@ Return ONLY a JSON array of strings:
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
     let result, response, text
-    try {
-      result = await model.generateContent(prompt)
-      response = result.response
-      text = response.text()
-    } catch (apiError: any) {
-      console.error('Gemini API error:', apiError.message)
-      // If model not found, try alternative
-      if (apiError.message?.includes('not found') || apiError.message?.includes('404')) {
-        console.log('Trying alternative model: gemini-1.5-pro')
-        try {
-          const altModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
-          result = await altModel.generateContent(prompt)
-          response = result.response
-          text = response.text()
-        } catch (altError: any) {
-          console.error('Alternative model also failed:', altError.message)
-          throw new functions.https.HttpsError('failed-precondition', `Gemini API error: ${apiError.message}. Please check your API key and model availability.`)
-        }
-      } else {
-        throw apiError
+    const modelNames = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+    let lastError: any = null
+    
+    for (const modelName of modelNames) {
+      try {
+        console.log(`Trying model: ${modelName}`)
+        const currentModel = genAI.getGenerativeModel({ model: modelName })
+        result = await currentModel.generateContent(prompt)
+        response = result.response
+        text = response.text()
+        console.log(`Successfully used model: ${modelName}`)
+        break // Success, exit loop
+      } catch (apiError: any) {
+        console.error(`Model ${modelName} failed:`, apiError.message)
+        lastError = apiError
+        // Continue to next model
+        continue
       }
+    }
+    
+    // If all models failed, throw error
+    if (!text) {
+      console.error('All models failed. Last error:', lastError?.message)
+      throw new functions.https.HttpsError(
+        'failed-precondition', 
+        `Gemini API error: All model attempts failed. Last error: ${lastError?.message || 'Unknown error'}. Please check your API key and model availability.`
+      )
     }
 
     // Parse JSON from response
