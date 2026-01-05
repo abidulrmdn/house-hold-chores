@@ -95,7 +95,8 @@ export const generateTaskSuggestions = functions.https.onCall(async (data, conte
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // Use gemini-pro model (most compatible)
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
 
     // Get existing routine names and categories
     const routineNames = routines.map((r: Routine) => r.name).join(', ')
@@ -166,9 +167,29 @@ Return ONLY a JSON array in this exact format:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
-    const result = await model.generateContent(prompt)
-    const response = result.response
-    const text = response.text()
+    let result, response, text
+    try {
+      result = await model.generateContent(prompt)
+      response = result.response
+      text = response.text()
+    } catch (apiError: any) {
+      console.error('Gemini API error:', apiError.message)
+      // If model not found, try alternative
+      if (apiError.message?.includes('not found') || apiError.message?.includes('404')) {
+        console.log('Trying alternative model: gemini-1.5-pro')
+        try {
+          const altModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+          result = await altModel.generateContent(prompt)
+          response = result.response
+          text = response.text()
+        } catch (altError: any) {
+          console.error('Alternative model also failed:', altError.message)
+          throw new functions.https.HttpsError('failed-precondition', `Gemini API error: ${apiError.message}. Please check your API key and model availability.`)
+        }
+      } else {
+        throw apiError
+      }
+    }
 
     // Check if response is empty
     if (!text || text.trim().length === 0) {
@@ -347,7 +368,8 @@ export const parseTaskInput = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // Use gemini-pro model (most compatible)
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
 
     // Language instruction
     const languageInstruction = language === 'ar' 
@@ -378,9 +400,29 @@ Return ONLY a JSON object in this exact format:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON object.`
 
-    const result = await model.generateContent(prompt)
-    const response = result.response
-    const text = response.text()
+    let result, response, text
+    try {
+      result = await model.generateContent(prompt)
+      response = result.response
+      text = response.text()
+    } catch (apiError: any) {
+      console.error('Gemini API error:', apiError.message)
+      // If model not found, try alternative
+      if (apiError.message?.includes('not found') || apiError.message?.includes('404')) {
+        console.log('Trying alternative model: gemini-1.5-pro')
+        try {
+          const altModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+          result = await altModel.generateContent(prompt)
+          response = result.response
+          text = response.text()
+        } catch (altError: any) {
+          console.error('Alternative model also failed:', altError.message)
+          throw new functions.https.HttpsError('failed-precondition', `Gemini API error: ${apiError.message}. Please check your API key and model availability.`)
+        }
+      } else {
+        throw apiError
+      }
+    }
 
     // Parse JSON from response
     let jsonText = text.trim()
@@ -416,34 +458,19 @@ export const generateInsights = functions.https.onCall(async (data, context) => 
   const now = Date.now()
   const oneHourAgo = now - 3600000
   
+  // Check rate limit BEFORE making API call
   if (rateLimitDoc.exists) {
-    const data = rateLimitDoc.data()
-    const lastRequest = data?.lastRequest || 0
-    const count = data?.count || 0
+    const rateLimitData = rateLimitDoc.data()
+    const lastRequest = rateLimitData?.lastRequest || 0
+    const count = rateLimitData?.count || 0
     
     // Reset count if last request was more than an hour ago
-    if (lastRequest < oneHourAgo) {
-      await rateLimitRef.set({
-        count: 1,
-        lastRequest: now
-      }, { merge: true })
-    } else {
+    if (lastRequest >= oneHourAgo) {
       // Check if limit exceeded
       if (count >= 10) {
         throw new functions.https.HttpsError('resource-exhausted', 'Rate limit exceeded. Please try again later.')
       }
-      // Increment count
-      await rateLimitRef.set({
-        count: count + 1,
-        lastRequest: now
-      }, { merge: true })
     }
-  } else {
-    // First request - create new document
-    await rateLimitRef.set({
-      count: 1,
-      lastRequest: now
-    })
   }
 
   const { tasks, routines, categories, language = 'en' } = data
@@ -453,7 +480,8 @@ export const generateInsights = functions.https.onCall(async (data, context) => 
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // Use gemini-pro model (most compatible)
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
 
     // Language instruction
     const languageInstruction = language === 'ar' 
@@ -500,9 +528,29 @@ Return ONLY a JSON array of strings:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
-    const result = await model.generateContent(prompt)
-    const response = result.response
-    const text = response.text()
+    let result, response, text
+    try {
+      result = await model.generateContent(prompt)
+      response = result.response
+      text = response.text()
+    } catch (apiError: any) {
+      console.error('Gemini API error:', apiError.message)
+      // If model not found, try alternative
+      if (apiError.message?.includes('not found') || apiError.message?.includes('404')) {
+        console.log('Trying alternative model: gemini-1.5-pro')
+        try {
+          const altModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+          result = await altModel.generateContent(prompt)
+          response = result.response
+          text = response.text()
+        } catch (altError: any) {
+          console.error('Alternative model also failed:', altError.message)
+          throw new functions.https.HttpsError('failed-precondition', `Gemini API error: ${apiError.message}. Please check your API key and model availability.`)
+        }
+      } else {
+        throw apiError
+      }
+    }
 
     // Parse JSON from response
     let jsonText = text.trim()
@@ -514,9 +562,34 @@ Do not include any markdown formatting, code blocks, or extra text. Just the JSO
 
     const insights = JSON.parse(jsonText)
 
+    // Only increment rate limit AFTER successful API call
+    if (rateLimitDoc.exists) {
+      const rateLimitData = rateLimitDoc.data()
+      const lastRequest = rateLimitData?.lastRequest || 0
+      const count = rateLimitData?.count || 0
+      
+      if (lastRequest < oneHourAgo) {
+        await rateLimitRef.set({
+          count: 1,
+          lastRequest: now
+        }, { merge: true })
+      } else {
+        await rateLimitRef.set({
+          count: count + 1,
+          lastRequest: now
+        }, { merge: true })
+      }
+    } else {
+      await rateLimitRef.set({
+        count: 1,
+        lastRequest: now
+      })
+    }
+
     return { insights }
   } catch (error: any) {
     console.error('Error generating insights:', error)
+    // Don't increment rate limit on error
     throw new functions.https.HttpsError('internal', 'Failed to generate insights', error.message)
   }
 })
