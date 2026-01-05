@@ -10,6 +10,7 @@ interface TaskListProps {
   users: User[]
   filter?: 'today' | 'week' | 'all' | 'my-tasks'
   currentUserId?: string
+  userFilter?: string | null
 }
 
 export default function TaskList({ 
@@ -18,13 +19,16 @@ export default function TaskList({
   categories, 
   users,
   filter = 'all',
-  currentUserId 
+  currentUserId,
+  userFilter
 }: TaskListProps) {
   const filteredTasks = useMemo(() => {
     let filtered = tasks
 
-    // Filter by user if needed
-    if (filter === 'my-tasks' && currentUserId) {
+    // Filter by user - prioritize userFilter, then my-tasks filter
+    if (userFilter) {
+      filtered = filtered.filter(task => task.assignedTo === userFilter)
+    } else if (filter === 'my-tasks' && currentUserId) {
       filtered = filtered.filter(task => task.assignedTo === currentUserId)
     }
 
@@ -49,7 +53,7 @@ export default function TaskList({
       }
       return a.dueDate - b.dueDate
     })
-  }, [tasks, filter, currentUserId])
+  }, [tasks, filter, currentUserId, userFilter])
 
   const getRoutine = (routineId: string) => {
     return routines.find(r => r.id === routineId)

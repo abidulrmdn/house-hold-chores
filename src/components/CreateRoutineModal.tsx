@@ -43,44 +43,86 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
       fetchCategories(householdId)
       fetchHouseholdMembers()
     }
-  }, [isOpen, householdId])
+  }, [isOpen, householdId, household?.members])
 
   const fetchHouseholdMembers = async () => {
-    if (!household?.members || !household.members.length) {
-      // If no members, at least show current user
-      if (userData) {
-        setHouseholdMembers([userData])
-      }
-      return
-    }
     try {
-      const { doc, getDoc } = await import('firebase/firestore')
+      const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore')
       const { db } = await import('@/firebase/config')
       if (!db) {
+        console.warn('Firestore not initialized')
         if (userData) {
           setHouseholdMembers([userData])
         }
         return
       }
       
-      const memberPromises = household.members.map(async (memberId) => {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', memberId))
-          if (userDoc.exists()) {
-            return { id: userDoc.id, ...userDoc.data() }
+      console.log('Fetching household members for householdId:', householdId)
+      console.log('Household object:', household)
+      
+      // Always fetch from Firestore to get the latest data
+      const usersQuery = query(
+        collection(db, 'users'),
+        where('householdId', '==', householdId)
+      )
+      const usersSnapshot = await getDocs(usersQuery)
+      const members = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      
+      console.log('Found members from Firestore query:', members.length, members)
+      
+      // Also try to get members from household object as backup
+      if (household?.members && household.members.length > 0) {
+        console.log('Household members array:', household.members)
+        const memberPromises = household.members.map(async (memberId: string) => {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', memberId))
+            if (userDoc.exists()) {
+              return { id: userDoc.id, ...userDoc.data() }
+            }
+            return null
+          } catch (error) {
+            console.error(`Error fetching user ${memberId}:`, error)
+            return null
           }
-          return null
-        } catch (error) {
-          console.error(`Error fetching user ${memberId}:`, error)
-          return null
+        })
+        const membersFromHousehold = (await Promise.all(memberPromises)).filter(Boolean)
+        console.log('Found members from household object:', membersFromHousehold.length, membersFromHousehold)
+        
+        // Merge both sources, removing duplicates
+        const allMembers = [...members]
+        membersFromHousehold.forEach(member => {
+          if (member && !allMembers.find(m => m.id === member.id)) {
+            allMembers.push(member)
+          }
+        })
+        
+        if (allMembers.length > 0) {
+          console.log('Setting household members:', allMembers)
+          setHouseholdMembers(allMembers)
+          return
         }
-      })
-      const members = (await Promise.all(memberPromises)).filter(Boolean)
-      setHouseholdMembers(members.length > 0 ? members : (userData ? [userData] : []))
+      }
+      
+      if (members.length > 0) {
+        console.log('Setting household members from query:', members)
+        setHouseholdMembers(members)
+      } else if (userData) {
+        // At least show current user
+        console.log('No members found, showing only current user')
+        setHouseholdMembers([userData])
+      } else {
+        console.warn('No members found and no userData')
+        setHouseholdMembers([])
+      }
     } catch (error) {
       console.error('Error fetching household members:', error)
       if (userData) {
         setHouseholdMembers([userData])
+      } else {
+        setHouseholdMembers([])
       }
     }
   }
@@ -95,13 +137,21 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
       let finalCategoryId = categoryId
 
       // Create category if new one is specified
-      if (!categoryId && categoryName) {
-        finalCategoryId = await createCategory({
-          name: categoryName,
-          color: categoryColor,
-          householdId
-        })
-        await fetchCategories(householdId)
+      if (!categoryId && categoryName.trim()) {
+        try {
+          finalCategoryId = await createCategory({
+            name: categoryName.trim(),
+            color: categoryColor,
+            householdId
+          })
+          // Wait a bit for Firestore to update
+          await new Promise(resolve => setTimeout(resolve, 100))
+          await fetchCategories(householdId)
+        } catch (error) {
+          console.error('Error creating category:', error)
+          toast.error('Failed to create category')
+          return
+        }
       }
 
       if (!finalCategoryId) {
@@ -210,7 +260,7 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
                 setCategoryName('') // Clear new category name when selecting existing
               }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent mb-2"
-              required
+              required={!categoryName}
             >
               <option value="">Select existing category</option>
               {categories.filter(cat => cat.householdId === householdId).map(cat => (
@@ -248,12 +298,12 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Assign To
+              Assign To {householdMembers.length > 0 && `(${householdMembers.length} member${householdMembers.length > 1 ? 's' : ''})`}
             </label>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
               {householdMembers.length > 0 ? (
                 householdMembers.map(member => (
-                  <label key={member.id} className="flex items-center gap-2 cursor-pointer">
+                  <label key={member.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
                     <input
                       type="checkbox"
                       checked={assignedTo.includes(member.id)}
@@ -266,14 +316,26 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId }: Cre
                       }}
                       className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">
-                      {member.displayName || member.email || member.id}
-                      {member.id === userData?.id && ' (You)'}
-                    </span>
+                    <div className="flex items-center gap-2 flex-1">
+                      {member.photoURL && (
+                        <img 
+                          src={member.photoURL} 
+                          alt={member.displayName || member.email}
+                          className="w-6 h-6 rounded-full"
+                        />
+                      )}
+                      <span className="text-sm text-gray-700">
+                        {member.displayName || member.email || member.id}
+                        {member.id === userData?.id && ' (You)'}
+                      </span>
+                    </div>
                   </label>
                 ))
               ) : (
-                <p className="text-sm text-gray-500">No other members in household</p>
+                <div className="text-center py-4">
+                  <p className="text-sm text-gray-500 mb-2">No members found</p>
+                  <p className="text-xs text-gray-400">If you just joined, try refreshing the page</p>
+                </div>
               )}
             </div>
             {assignedTo.length === 0 && (

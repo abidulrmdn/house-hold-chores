@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db, auth } from '@/firebase/config'
 import { Household } from '@/types'
 
@@ -9,9 +9,10 @@ interface HouseholdState {
   createHousehold: (name: string, userId: string) => Promise<string>
   joinHousehold: (householdId: string, userId: string) => Promise<void>
   loadHousehold: (householdId: string) => Promise<void>
+  leaveHousehold: (userId: string) => Promise<void>
 }
 
-export const useHouseholdStore = create<HouseholdState>((set) => ({
+export const useHouseholdStore = create<HouseholdState>((set, get) => ({
   household: null,
   loading: false,
 
@@ -197,6 +198,44 @@ export const useHouseholdStore = create<HouseholdState>((set) => ({
     } catch (error) {
       console.error('Error loading household:', error)
       set({ household: null, loading: false })
+    }
+  },
+
+  leaveHousehold: async (userId: string) => {
+    set({ loading: true })
+    try {
+      if (!db) {
+        throw new Error('Firestore database not initialized')
+      }
+
+      const currentHousehold = await get().household
+      if (!currentHousehold) {
+        throw new Error('No household to leave')
+      }
+
+      // Remove user from household members
+      const updatedMembers = currentHousehold.members.filter((id: string) => id !== userId)
+      
+      if (updatedMembers.length === 0) {
+        // If no members left, delete the household
+        await deleteDoc(doc(db, 'households', currentHousehold.id))
+      } else {
+        // Update household with remaining members
+        await updateDoc(doc(db, 'households', currentHousehold.id), {
+          members: updatedMembers
+        })
+      }
+
+      // Remove householdId from user document
+      await updateDoc(doc(db, 'users', userId), {
+        householdId: null
+      })
+
+      set({ household: null, loading: false })
+    } catch (error) {
+      console.error('Error leaving household:', error)
+      set({ loading: false })
+      throw error
     }
   }
 }))

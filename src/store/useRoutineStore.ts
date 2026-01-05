@@ -25,6 +25,9 @@ interface RoutineState {
   createRoutine: (routine: Omit<Routine, 'id' | 'createdAt'>) => Promise<string>
   createCategory: (category: Omit<Category, 'id' | 'createdAt'>) => Promise<string>
   completeTask: (taskId: string, userId: string) => Promise<void>
+  uncompleteTask: (taskId: string) => Promise<void>
+  updateTask: (taskId: string, updates: Partial<TaskInstance>) => Promise<void>
+  updateRoutine: (routineId: string, updates: Partial<Routine>) => Promise<void>
   subscribeToTasks: (householdId: string, userId?: string) => () => void
   generateTaskInstances: (routineId: string, routine: Omit<Routine, 'id' | 'createdAt'> | Routine, startDate?: number) => Promise<void>
   checkAndUpdateMissedTasks: () => Promise<void>
@@ -103,16 +106,18 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
       if (!db) {
         throw new Error('Firestore not initialized')
       }
+      // Fetch without orderBy to avoid index requirement, sort in memory
       const q = query(
         collection(db, 'categories'),
-        where('householdId', '==', householdId),
-        orderBy('createdAt', 'desc')
+        where('householdId', '==', householdId)
       )
       const snapshot = await getDocs(q)
       const categories = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Category))
+      // Sort by createdAt in memory
+      categories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
       set({ categories })
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -246,6 +251,55 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     }
   },
 
+  uncompleteTask: async (taskId: string) => {
+    try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
+      
+      await updateDoc(doc(db, 'taskInstances', taskId), {
+        isCompleted: false,
+        completedDate: null,
+        completedBy: null
+      })
+    } catch (error) {
+      console.error('Error uncompleting task:', error)
+      throw error
+    }
+  },
+
+  updateTask: async (taskId: string, updates: Partial<TaskInstance>) => {
+    try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
+      
+      // Remove id from updates if present (can't update document ID)
+      const { id, ...updateData } = updates as any
+      
+      await updateDoc(doc(db, 'taskInstances', taskId), updateData)
+    } catch (error) {
+      console.error('Error updating task:', error)
+      throw error
+    }
+  },
+
+  updateRoutine: async (routineId: string, updates: Partial<Routine>) => {
+    try {
+      if (!db) {
+        throw new Error('Firestore not initialized')
+      }
+      
+      // Remove id from updates if present (can't update document ID)
+      const { id, ...updateData } = updates as any
+      
+      await updateDoc(doc(db, 'routines', routineId), updateData)
+    } catch (error) {
+      console.error('Error updating routine:', error)
+      throw error
+    }
+  },
+
   subscribeToTasks: (householdId: string, userId?: string) => {
     if (!db) {
       console.error('Firestore not initialized')
@@ -254,17 +308,17 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     let q
     
     if (userId) {
+      // Filter by user, sort in memory to avoid index requirement
       q = query(
         collection(db, 'taskInstances'),
         where('householdId', '==', householdId),
-        where('assignedTo', '==', userId),
-        orderBy('dueDate', 'asc')
+        where('assignedTo', '==', userId)
       )
     } else {
+      // Just filter by household, sort in memory
       q = query(
         collection(db, 'taskInstances'),
-        where('householdId', '==', householdId),
-        orderBy('dueDate', 'asc')
+        where('householdId', '==', householdId)
       )
     }
 
@@ -276,9 +330,14 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
         completedDate: doc.data().completedDate?.toMillis?.() || doc.data().completedDate,
         createdAt: doc.data().createdAt?.toMillis?.() || doc.data().createdAt
       } as TaskInstance))
+      // Sort by dueDate in memory
+      tasks.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0))
       set({ tasks })
-    }, (error) => {
-      console.error('Error in task subscription:', error)
+    }, (error: any) => {
+      // Only log if it's not an index error (which we're avoiding)
+      if (!error?.message?.includes('index')) {
+        console.error('Error in task subscription:', error)
+      }
     })
 
     return unsubscribe

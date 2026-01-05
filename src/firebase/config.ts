@@ -83,15 +83,27 @@ export async function requestNotificationPermission(): Promise<string | null> {
   if (!messaging) return null
 
   try {
+    // Check if VAPID key is configured
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
+    if (!vapidKey || vapidKey === 'demo-vapid-key') {
+      // Notifications not configured, fail silently
+      return null
+    }
+
     const permission = await Notification.requestPermission()
     if (permission === 'granted') {
       const token = await getToken(messaging, {
-        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
+        vapidKey: vapidKey
       })
       return token
     }
-  } catch (error) {
-    console.error('Error getting notification token:', error)
+  } catch (error: any) {
+    // Only log if it's not a configuration error
+    if (error?.code !== 'messaging/invalid-vapid-key' && 
+        error?.message?.includes('applicationServerKey')) {
+      // Silently ignore notification errors - they're not critical
+      console.debug('Notifications not available:', error.message)
+    }
   }
   return null
 }

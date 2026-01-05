@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Calendar, CheckSquare, User, Bell, Home, Users } from 'lucide-react'
+import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
@@ -7,6 +7,7 @@ import TaskList from '@/components/TaskList'
 import CreateRoutineModal from '@/components/CreateRoutineModal'
 import InviteModal from '@/components/InviteModal'
 import JoinHouseholdModal from '@/components/JoinHouseholdModal'
+import ManageCategoriesModal from '@/components/ManageCategoriesModal'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/firebase/config'
 import { requestNotificationPermission } from '@/firebase/config'
@@ -25,12 +26,16 @@ export default function Dashboard() {
     subscribeToTasks,
     checkAndUpdateMissedTasks
   } = useRoutineStore()
-  const { household, createHousehold, loadHousehold } = useHouseholdStore()
+  const { household, createHousehold, loadHousehold, leaveHousehold } = useHouseholdStore()
   const [householdName, setHouseholdName] = useState('')
   const [isCreatingHousehold, setIsCreatingHousehold] = useState(false)
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
   const [joinHouseholdId, setJoinHouseholdId] = useState<string | null>(null)
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [householdUsers, setHouseholdUsers] = useState<any[]>([])
+  const [userFilter, setUserFilter] = useState<string | null>(null)
 
   // Check URL for join parameter
   useEffect(() => {
@@ -48,8 +53,57 @@ export default function Dashboard() {
   useEffect(() => {
     if (userData?.householdId) {
       loadHousehold(userData.householdId)
+      fetchHouseholdUsers(userData.householdId)
     }
   }, [userData?.householdId, loadHousehold])
+
+  const fetchHouseholdUsers = async (householdId: string) => {
+    try {
+      const { collection, query, where, getDocs } = await import('firebase/firestore')
+      const { db } = await import('@/firebase/config')
+      if (!db) return
+
+      const usersQuery = query(
+        collection(db, 'users'),
+        where('householdId', '==', householdId)
+      )
+      const usersSnapshot = await getDocs(usersQuery)
+      const users = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      setHouseholdUsers(users)
+    } catch (error: any) {
+      // If permission error, try to get users from household object instead
+      if (error?.code === 'permission-denied' && household?.members) {
+        try {
+          const { doc, getDoc } = await import('firebase/firestore')
+          const { db } = await import('@/firebase/config')
+          if (!db) return
+          
+          const memberPromises = household.members.map(async (memberId: string) => {
+            try {
+              const userDoc = await getDoc(doc(db, 'users', memberId))
+              if (userDoc.exists()) {
+                return { id: userDoc.id, ...userDoc.data() }
+              }
+              return null
+            } catch {
+              return null
+            }
+          })
+          const members = (await Promise.all(memberPromises)).filter(Boolean)
+          if (members.length > 0) {
+            setHouseholdUsers(members)
+          }
+        } catch (fallbackError) {
+          console.error('Error fetching household users from members:', fallbackError)
+        }
+      } else {
+        console.error('Error fetching household users:', error)
+      }
+    }
+  }
 
   useEffect(() => {
     if (!userData?.householdId) {
@@ -58,9 +112,8 @@ export default function Dashboard() {
 
     fetchRoutines(userData.householdId)
     fetchCategories(userData.householdId)
-    // Don't filter by user for 'week' and 'today' tabs - show all household tasks
-    const shouldFilterByUser = activeTab === 'my-tasks'
-    const unsubscribe = subscribeToTasks(userData.householdId, shouldFilterByUser ? user?.uid : undefined)
+    // Always fetch all household tasks, filtering will be done in TaskList
+    const unsubscribe = subscribeToTasks(userData.householdId)
 
     // Check for missed tasks periodically
     const interval = setInterval(() => {
@@ -73,15 +126,39 @@ export default function Dashboard() {
     }
   }, [userData?.householdId, activeTab, user?.uid, fetchRoutines, fetchCategories, subscribeToTasks, checkAndUpdateMissedTasks])
 
+  // Clear user filter when switching tabs (except my-tasks)
   useEffect(() => {
-    // Request notification permission on mount
+    if (activeTab !== 'my-tasks') {
+      setUserFilter(null)
+    } else if (activeTab === 'my-tasks' && user?.uid) {
+      // Auto-filter to current user when on "my-tasks" tab
+      setUserFilter(user.uid)
+    }
+  }, [activeTab, user?.uid])
+
+  useEffect(() => {
+    // Request notification permission on mount (fail silently if not configured)
     requestNotificationPermission().then(token => {
       if (token) {
         console.log('Notification token:', token)
         // You can save this token to Firestore for sending notifications
       }
+    }).catch(() => {
+      // Silently ignore notification errors
     })
   }, [])
+
+  // Close settings dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (isSettingsOpen && !target.closest('.settings-dropdown')) {
+        setIsSettingsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isSettingsOpen])
 
   const handleSignOut = async () => {
     try {
@@ -94,6 +171,48 @@ export default function Dashboard() {
       toast.success('Signed out successfully')
     } catch (error) {
       console.error('Error signing out:', error)
+    }
+  }
+
+  const handleLeaveHousehold = async () => {
+    if (!user || !confirm('Are you sure you want to leave this household? You will need to join or create a new one to continue.')) {
+      return
+    }
+    
+    try {
+      await leaveHousehold(user.uid)
+      await loadUserData()
+      toast.success('Left household successfully')
+      setIsSettingsOpen(false)
+    } catch (error: any) {
+      console.error('Error leaving household:', error)
+      toast.error(error.message || 'Failed to leave household')
+    }
+  }
+
+  const handleCreateNewHousehold = async () => {
+    if (!user) {
+      toast.error('Please sign in first')
+      return
+    }
+    
+    if (!confirm('Are you sure you want to create a new household? You will leave your current household.')) {
+      return
+    }
+    
+    try {
+      // Leave current household first
+      if (userData?.householdId) {
+        await leaveHousehold(user.uid)
+      }
+      
+      // Show create household form
+      setIsSettingsOpen(false)
+      setHouseholdName('')
+      // The welcome screen will show automatically
+    } catch (error: any) {
+      console.error('Error creating new household:', error)
+      toast.error(error.message || 'Failed to create new household')
     }
   }
 
@@ -211,27 +330,44 @@ export default function Dashboard() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <h1 className="text-2xl font-bold text-primary-700">Routine Manager</h1>
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between min-h-16 py-2 sm:py-0 sm:h-16 gap-2 sm:gap-4">
+            <div className="flex-1 min-w-0">
+              {household && (
+                <h1 className="text-xl sm:text-2xl font-bold text-primary-700 truncate">{household.name}</h1>
+              )}
+              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Routine Manager</p>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               {userData?.householdId && (
                 <button
                   onClick={() => setIsInviteModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                  className="hidden sm:flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs sm:text-sm font-medium"
                   title="Invite to household"
                 >
                   <Users className="w-4 h-4" />
-                  Invite
+                  <span className="hidden sm:inline">Invite</span>
                 </button>
               )}
               <button
-                onClick={() => requestNotificationPermission().then(() => toast.success('Notifications enabled!'))}
-                className="p-2 text-gray-600 hover:text-gray-800"
+                onClick={() => {
+                  requestNotificationPermission()
+                    .then((token) => {
+                      if (token) {
+                        toast.success('Notifications enabled!')
+                      } else {
+                        toast.error('Notifications not configured. Please set up VAPID key in Firebase.')
+                      }
+                    })
+                    .catch(() => {
+                      toast.error('Failed to enable notifications')
+                    })
+                }}
+                className="p-2 text-gray-600 hover:text-gray-800 flex-shrink-0"
                 title="Enable notifications"
               >
                 <Bell className="w-5 h-5" />
               </button>
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 {userData?.photoURL && (
                   <img 
                     src={userData.photoURL} 
@@ -241,9 +377,56 @@ export default function Dashboard() {
                 )}
                 <span className="text-sm font-medium text-gray-700">{userData?.displayName || 'User'}</span>
               </div>
+              {userData?.photoURL && (
+                <img 
+                  src={userData.photoURL} 
+                  alt={userData.displayName}
+                  className="sm:hidden w-8 h-8 rounded-full flex-shrink-0"
+                />
+              )}
+              {userData?.householdId && (
+                <div className="relative settings-dropdown flex-shrink-0">
+                  <button
+                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                    className="p-2 text-gray-600 hover:text-gray-800"
+                    title="Settings"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
+                  {isSettingsOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <button
+                        onClick={() => {
+                          setIsManageCategoriesOpen(true)
+                          setIsSettingsOpen(false)
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <Tag className="w-4 h-4" />
+                        Manage Categories
+                      </button>
+                      <div className="border-t border-gray-200 my-2"></div>
+                      <button
+                        onClick={handleLeaveHousehold}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Leave Household
+                      </button>
+                      <button
+                        onClick={handleCreateNewHousehold}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <Home className="w-4 h-4" />
+                        Create New Household
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 onClick={handleSignOut}
-                className="text-sm text-gray-600 hover:text-gray-800"
+                className="hidden sm:block text-sm text-gray-600 hover:text-gray-800 whitespace-nowrap"
               >
                 Sign Out
               </button>
@@ -279,13 +462,40 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* User Filter */}
+        {userData?.householdId && householdUsers.length > 1 && (
+          <div className="mb-4 flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-700">Filter by person:</label>
+            <select
+              value={userFilter || ''}
+              onChange={(e) => setUserFilter(e.target.value || null)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+            >
+              <option value="">All People</option>
+              {householdUsers.map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.displayName || user.email || user.id} {user.id === userData?.id ? '(You)' : ''}
+                </option>
+              ))}
+            </select>
+            {userFilter && (
+              <button
+                onClick={() => setUserFilter(null)}
+                className="text-sm text-gray-600 hover:text-gray-800"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
         <TaskList
           tasks={tasks}
           routines={routines}
           categories={categories}
-          users={[]} // TODO: Fetch users from household
+          users={householdUsers}
           filter={activeTab}
           currentUserId={user?.uid}
+          userFilter={userFilter}
         />
       </main>
 
@@ -330,6 +540,14 @@ export default function Dashboard() {
         }}
         initialHouseholdId={joinHouseholdId}
       />
+
+      {userData?.householdId && (
+        <ManageCategoriesModal
+          isOpen={isManageCategoriesOpen}
+          onClose={() => setIsManageCategoriesOpen(false)}
+          householdId={userData.householdId}
+        />
+      )}
     </div>
   )
 }
