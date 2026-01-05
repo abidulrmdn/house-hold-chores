@@ -348,3 +348,211 @@ Do not include any markdown formatting, code blocks, or extra text. Just the JSO
   }
 })
 
+/**
+ * Scheduled function to send daily task reminders at 8 AM
+ * Runs every day at 8:00 AM UTC (adjust timezone as needed)
+ */
+export const sendDailyTaskReminders = functions.pubsub
+  .schedule('0 8 * * *') // 8 AM UTC every day (cron format)
+  .timeZone('UTC')
+  .onRun(async (context) => {
+    console.log('Running daily task reminders job...')
+    
+    try {
+      const db = admin.firestore()
+      const messaging = admin.messaging()
+      
+      // Get all users with notifications enabled
+      const usersSnapshot = await db.collection('users')
+        .where('notificationEnabled', '==', true)
+        .get()
+      
+      if (usersSnapshot.empty) {
+        console.log('No users with notifications enabled')
+        return null
+      }
+      
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      
+      const todayStart = today.getTime()
+      const todayEnd = tomorrow.getTime()
+      
+      let notificationsSent = 0
+      let errors = 0
+      
+      // Process each user
+      for (const userDoc of usersSnapshot.docs) {
+        try {
+          const userData = userDoc.data()
+          const userId = userDoc.id
+          const fcmToken = userData.fcmToken
+          
+          if (!fcmToken) {
+            console.log(`User ${userId} has no FCM token, skipping`)
+            continue
+          }
+          
+          // Get tasks due today assigned to this user
+          const tasksSnapshot = await db.collection('taskInstances')
+            .where('householdId', '==', userData.householdId)
+            .where('assignedTo', '==', userId)
+            .where('dueDate', '>=', todayStart)
+            .where('dueDate', '<', todayEnd)
+            .get()
+          
+          // Filter to only incomplete tasks
+          const incompleteTasks = tasksSnapshot.docs.filter(
+            doc => !doc.data().isCompleted
+          )
+          
+          if (incompleteTasks.length === 0) {
+            console.log(`User ${userId} has no incomplete tasks today, skipping`)
+            continue
+          }
+          
+          // Prepare notification
+          const taskCount = incompleteTasks.length
+          const title = taskCount === 1 
+            ? '1 task due today! 📋'
+            : `${taskCount} tasks due today! 📋`
+          
+          const body = taskCount === 1
+            ? 'You have 1 task to complete today. Check it out!'
+            : `You have ${taskCount} tasks to complete today. Let's get started!`
+          
+          // Send FCM notification
+          const message = {
+            notification: {
+              title,
+              body
+            },
+            data: {
+              type: 'daily-reminder',
+              url: 'https://household-chores-d8eae.web.app' // Your app URL
+            },
+            token: fcmToken,
+            webpush: {
+              notification: {
+                icon: '/pwa-192x192.png',
+                badge: '/pwa-192x192.png',
+                tag: 'daily-tasks-reminder'
+              }
+            }
+          }
+          
+          await messaging.send(message)
+          notificationsSent++
+          console.log(`Sent notification to user ${userId} (${taskCount} tasks)`)
+          
+        } catch (error: any) {
+          errors++
+          console.error(`Error sending notification to user ${userDoc.id}:`, error)
+          
+          // If token is invalid, disable notifications for this user
+          if (error.code === 'messaging/invalid-registration-token' || 
+              error.code === 'messaging/registration-token-not-registered') {
+            await userDoc.ref.update({
+              notificationEnabled: false,
+              fcmToken: admin.firestore.FieldValue.delete()
+            })
+            console.log(`Disabled notifications for user ${userDoc.id} (invalid token)`)
+          }
+        }
+      }
+      
+      console.log(`Daily reminders job completed. Sent: ${notificationsSent}, Errors: ${errors}`)
+      return null
+      
+    } catch (error: any) {
+      console.error('Error in daily task reminders job:', error)
+      throw error
+    }
+  })
+
+/**
+ * Test function to send a push notification to a specific user
+ * Useful for testing notifications locally
+ */
+export const testPushNotification = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated')
+  }
+
+  const userId = context.auth.uid
+  const { taskCount = 1 } = data
+
+  try {
+    const db = admin.firestore()
+    const messaging = admin.messaging()
+
+    // Get user's FCM token
+    const userDoc = await db.collection('users').doc(userId).get()
+    
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'User not found')
+    }
+
+    const userData = userDoc.data()
+    const fcmToken = userData?.fcmToken
+
+    if (!fcmToken) {
+      throw new functions.https.HttpsError('failed-precondition', 'User has no FCM token. Please enable notifications first.')
+    }
+
+    // Prepare test notification
+    const title = taskCount === 1 
+      ? '🧪 Test: 1 task due today! 📋'
+      : `🧪 Test: ${taskCount} tasks due today! 📋`
+    
+    const body = taskCount === 1
+      ? 'This is a test notification. You have 1 task to complete today.'
+      : `This is a test notification. You have ${taskCount} tasks to complete today.`
+
+    // Send FCM notification
+    const message = {
+      notification: {
+        title,
+        body
+      },
+      data: {
+        type: 'test-notification',
+        url: 'https://household-chores-d8eae.web.app'
+      },
+      token: fcmToken,
+      webpush: {
+        notification: {
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
+          tag: 'test-notification'
+        }
+      }
+    }
+
+    await messaging.send(message)
+    
+    return { 
+      success: true, 
+      message: 'Test notification sent successfully!',
+      taskCount 
+    }
+  } catch (error: any) {
+    console.error('Error sending test notification:', error)
+    
+    if (error.code === 'messaging/invalid-registration-token' || 
+        error.code === 'messaging/registration-token-not-registered') {
+      // Update user to remove invalid token
+      await admin.firestore().collection('users').doc(userId).update({
+        notificationEnabled: false,
+        fcmToken: admin.firestore.FieldValue.delete()
+      })
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid FCM token. Please re-enable notifications.')
+    }
+    
+    throw new functions.https.HttpsError('internal', `Failed to send test notification: ${error.message}`)
+  }
+})
+

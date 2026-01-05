@@ -20,6 +20,7 @@ import SmartInsights from '@/components/SmartInsights'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/firebase/config'
 import { requestNotificationPermission, sendTestNotification, scheduleDelayedNotification } from '@/firebase/config'
+import { sendDailyNotification, scheduleDailyNotificationCheck } from '@/services/notificationService'
 import toast from 'react-hot-toast'
 import { isToday, startOfWeek, endOfWeek } from 'date-fns'
 
@@ -55,6 +56,7 @@ export default function Dashboard() {
   const [quickFilter, setQuickFilter] = useState<'overdue' | 'today' | 'upcoming' | 'avoiding' | 'quick' | null>(null)
   const [showQuickTasksInfo, setShowQuickTasksInfo] = useState(false)
   const [pendingSuggestion, setPendingSuggestion] = useState<any>(null)
+  const [notificationStatus, setNotificationStatus] = useState<'enabled' | 'disabled' | 'unknown'>('unknown')
   const { theme, setTheme, effectiveTheme } = useThemeStore()
 
   // Check URL for join parameter
@@ -157,15 +159,37 @@ export default function Dashboard() {
   }, [activeTab, user?.uid])
 
   useEffect(() => {
-    // Request notification permission on mount (fail silently if not configured)
-    requestNotificationPermission().then(token => {
-      if (token) {
-        console.log('Notification token:', token)
-        // You can save this token to Firestore for sending notifications
+    // Check notification status on mount and save token to Firestore
+    const checkNotificationStatus = async () => {
+      try {
+        if (Notification.permission === 'granted') {
+          const token = await requestNotificationPermission()
+          if (token && user?.uid) {
+            setNotificationStatus('enabled')
+            // Save token to Firestore for Cloud Functions to use
+            try {
+              const { doc: docFn, updateDoc: updateDocFn } = await import('firebase/firestore')
+              const { db } = await import('@/firebase/config')
+              if (db) {
+                await updateDocFn(docFn(db, 'users', user.uid), {
+                  fcmToken: token,
+                  notificationEnabled: true
+                })
+              }
+            } catch (error) {
+              console.error('Error saving FCM token to Firestore:', error)
+            }
+          } else {
+            setNotificationStatus('disabled')
+          }
+        } else {
+          setNotificationStatus('disabled')
+        }
+      } catch {
+        setNotificationStatus('disabled')
       }
-    }).catch(() => {
-      // Silently ignore notification errors
-    })
+    }
+    checkNotificationStatus()
   }, [])
 
   // Close settings dropdown when clicking outside
@@ -345,7 +369,7 @@ export default function Dashboard() {
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
     
     return {
-      today: tasks.filter(t => isToday(new Date(t.dueDate))).length,
+      today: tasks.filter(t => isToday(new Date(t.dueDate)) && !t.isCompleted).length,
       week: tasks.filter(t => {
         const taskDate = new Date(t.dueDate)
         return taskDate >= weekStart && taskDate <= weekEnd
@@ -354,6 +378,29 @@ export default function Dashboard() {
       all: tasks.length
     }
   }, [tasks, user?.uid])
+
+  // Schedule daily notification check
+  useEffect(() => {
+    if (notificationStatus === 'enabled' && userData?.householdId && user?.uid) {
+      scheduleDailyNotificationCheck(async () => {
+        // Get actual today's task count for current user
+        const todayTasks = tasks.filter(t => 
+          isToday(new Date(t.dueDate)) && 
+          !t.isCompleted &&
+          t.assignedTo === user.uid
+        )
+        const count = todayTasks.length
+        
+        if (count > 0) {
+          try {
+            await sendDailyNotification(count)
+          } catch (error) {
+            console.error('Failed to send daily notification:', error)
+          }
+        }
+      })
+    }
+  }, [notificationStatus, userData?.householdId, tasks, user?.uid])
 
   const tabs = [
     { id: 'today' as const, label: 'Today', icon: Calendar, count: taskCounts.today },
@@ -518,16 +565,32 @@ export default function Dashboard() {
                       
                       // First try to enable push notifications (requires VAPID key)
                       const token = await requestNotificationPermission()
-                      if (token) {
-                        toast.success('Push notifications enabled! You\'ll receive notifications even when the app is closed.')
+                      if (token && user?.uid) {
+                        setNotificationStatus('enabled')
+                        // Save token to Firestore for Cloud Functions
+                        try {
+                          const { doc: docFn, updateDoc: updateDocFn } = await import('firebase/firestore')
+                          const { db } = await import('@/firebase/config')
+                          if (db) {
+                            await updateDocFn(docFn(db, 'users', user.uid), {
+                              fcmToken: token,
+                              notificationEnabled: true
+                            })
+                          }
+                        } catch (error) {
+                          console.error('Error saving FCM token:', error)
+                        }
+                        toast.success('Push notifications enabled! You\'ll receive daily notifications at 8 AM.')
                         console.log('FCM Token:', token) // Log token for debugging
                       } else {
                         // Check if VAPID key is configured
                         if (!vapidKey || vapidKey === 'demo-vapid-key' || vapidKey.trim() === '') {
+                          setNotificationStatus('disabled')
                           toast('VAPID key not configured. Please add VITE_FIREBASE_VAPID_KEY to your .env file and restart the dev server.', { icon: 'ℹ️' })
                         } else {
                           // VAPID key is set but token request failed
                           if (Notification.permission === 'granted') {
+                            setNotificationStatus('disabled')
                             toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
                           } else if (Notification.permission === 'default') {
                             const permission = await Notification.requestPermission()
@@ -535,71 +598,116 @@ export default function Dashboard() {
                               // Retry getting token after permission granted
                               const retryToken = await requestNotificationPermission()
                               if (retryToken) {
+                                setNotificationStatus('enabled')
                                 toast.success('Push notifications enabled!')
                               } else {
+                                setNotificationStatus('disabled')
                                 toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
                               }
                             } else {
+                              setNotificationStatus('disabled')
                               toast.error('Notification permission denied')
                             }
                           } else {
+                            setNotificationStatus('disabled')
                             toast.error('Notifications blocked. Please enable in browser settings.')
                           }
                         }
                       }
                     } catch (error: any) {
                       console.error('Notification error:', error)
+                      setNotificationStatus('disabled')
                       toast.error(`Failed to enable notifications: ${error.message}`)
                     }
                   }}
-                  className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 flex-shrink-0"
-                  title="Enable notifications"
+                  className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 flex-shrink-0 relative"
+                  title={notificationStatus === 'enabled' ? 'Notifications enabled' : 'Enable notifications'}
                 >
                   <Bell className="w-5 h-5" />
+                  {notificationStatus === 'enabled' && (
+                    <span className="absolute top-0 right-0 w-2 h-2 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+                  )}
+                  {notificationStatus === 'disabled' && (
+                    <span className="absolute top-0 right-0 w-2 h-2 bg-gray-400 rounded-full border-2 border-white dark:border-gray-800"></span>
+                  )}
                 </button>
                 {import.meta.env.DEV && (
-                  <div className="absolute right-0 top-full mt-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  <div className="absolute right-0 top-full mt-1 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 min-w-[200px]">
+                    <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 px-2">Test Notifications</div>
                     <button
                       onClick={async () => {
                         try {
                           await sendTestNotification()
-                          toast.success('Test notification sent!')
+                          toast.success('Browser notification sent!')
                         } catch (error: any) {
                           toast.error(error.message || 'Failed to send test notification')
                         }
                       }}
-                      className="px-3 py-1.5 bg-primary-600 text-white text-xs rounded-lg shadow-lg whitespace-nowrap"
-                      title="Send immediate test notification"
+                      className="px-3 py-1.5 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 whitespace-nowrap text-left w-full"
+                      title="Send immediate browser notification"
                     >
-                      Test Now
+                      Browser Notification
                     </button>
                     <button
                       onClick={async () => {
                         try {
-                          await scheduleDelayedNotification(30)
-                          toast.success('Delayed notification scheduled for 30 seconds! You can close the browser now.')
+                          await scheduleDelayedNotification(10)
+                          toast.success('Delayed notification scheduled for 10 seconds!')
                         } catch (error: any) {
                           toast.error(error.message || 'Failed to schedule delayed notification')
                         }
                       }}
-                      className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg shadow-lg whitespace-nowrap"
-                      title="Schedule notification for 30 seconds (works when browser is closed)"
+                      className="px-3 py-1.5 bg-green-500 text-white text-xs rounded hover:bg-green-600 whitespace-nowrap text-left w-full"
+                      title="Schedule notification for 10 seconds (works when browser is closed)"
                     >
-                      Test 30s
+                      Delayed (10s)
+                    </button>
+                    <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          if (notificationStatus !== 'enabled') {
+                            toast.error('Please enable notifications first!')
+                            return
+                          }
+                          const { httpsCallable } = await import('firebase/functions')
+                          const { functions } = await import('@/firebase/config')
+                          if (!functions) throw new Error('Functions not initialized')
+                          
+                          const testNotification = httpsCallable(functions, 'testPushNotification')
+                          const result = await testNotification({ taskCount: 1 })
+                          toast.success((result.data as any).message || 'Push notification sent!')
+                        } catch (error: any) {
+                          toast.error(`Failed: ${error.message || 'Unknown error'}`)
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 whitespace-nowrap text-left w-full"
+                      title="Test FCM push notification via Cloud Function (1 task)"
+                    >
+                      🧪 Test Push (1 task)
                     </button>
                     <button
                       onClick={async () => {
                         try {
-                          await scheduleDelayedNotification(60)
-                          toast.success('Delayed notification scheduled for 60 seconds! You can close the browser now.')
+                          if (notificationStatus !== 'enabled') {
+                            toast.error('Please enable notifications first!')
+                            return
+                          }
+                          const { httpsCallable } = await import('firebase/functions')
+                          const { functions } = await import('@/firebase/config')
+                          if (!functions) throw new Error('Functions not initialized')
+                          
+                          const testNotification = httpsCallable(functions, 'testPushNotification')
+                          const result = await testNotification({ taskCount: 5 })
+                          toast.success((result.data as any).message || 'Push notification sent!')
                         } catch (error: any) {
-                          toast.error(error.message || 'Failed to schedule delayed notification')
+                          toast.error(`Failed: ${error.message || 'Unknown error'}`)
                         }
                       }}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg shadow-lg whitespace-nowrap"
-                      title="Schedule notification for 60 seconds (works when browser is closed)"
+                      className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 whitespace-nowrap text-left w-full"
+                      title="Test FCM push notification via Cloud Function (5 tasks)"
                     >
-                      Test 1min
+                      🧪 Test Push (5 tasks)
                     </button>
                   </div>
                 )}

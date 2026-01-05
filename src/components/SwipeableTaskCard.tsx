@@ -37,18 +37,22 @@ export default function SwipeableTaskCard({
   const { completeTask, uncompleteTask } = useRoutineStore()
   const { user } = useAuthStore()
 
-  // Close menu when clicking outside
+  // Close menu when clicking outside or when edit modal opens
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsQuickMenuOpen(false)
       }
     }
-    if (isQuickMenuOpen) {
+    if (isQuickMenuOpen && !isEditModalOpen) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [isQuickMenuOpen])
+    // Close menu when edit modal opens
+    if (isEditModalOpen && isQuickMenuOpen) {
+      setIsQuickMenuOpen(false)
+    }
+  }, [isQuickMenuOpen, isEditModalOpen])
 
   // Background colors for swipe actions - adjusted for shorter swipe
   const rightBgOpacity = useTransform(x, [0, SWIPE_THRESHOLD], [0, 1])
@@ -372,8 +376,12 @@ export default function SwipeableTaskCard({
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
+                        e.preventDefault()
                         setIsQuickMenuOpen(false)
-                        setIsEditModalOpen(true)
+                        // Small delay to ensure menu closes before modal opens
+                        setTimeout(() => {
+                          setIsEditModalOpen(true)
+                        }, 100)
                       }}
                       className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                     >
