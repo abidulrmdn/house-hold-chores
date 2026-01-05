@@ -475,6 +475,7 @@ export const sendDailyTaskReminders = functions.pubsub
 /**
  * Test function to send a push notification to a specific user
  * Useful for testing notifications locally
+ * Supports delay parameter to test notifications when browser is closed
  */
 export const testPushNotification = functions.https.onCall(async (data, context) => {
   // Verify authentication
@@ -483,7 +484,7 @@ export const testPushNotification = functions.https.onCall(async (data, context)
   }
 
   const userId = context.auth.uid
-  const { taskCount = 1 } = data
+  const { taskCount = 1, delaySeconds = 0 } = data
 
   try {
     const db = admin.firestore()
@@ -532,12 +533,38 @@ export const testPushNotification = functions.https.onCall(async (data, context)
       }
     }
 
-    await messaging.send(message)
-    
-    return { 
-      success: true, 
-      message: 'Test notification sent successfully!',
-      taskCount 
+    // If delay is specified, wait before sending
+    if (delaySeconds > 0) {
+      // Return immediately and schedule the notification
+      // Use setTimeout wrapped in a Promise
+      await new Promise((resolve) => {
+        setTimeout(async () => {
+          try {
+            await messaging.send(message)
+            console.log(`Test notification sent after ${delaySeconds} seconds to user ${userId}`)
+            resolve(undefined)
+          } catch (error) {
+            console.error('Error sending delayed notification:', error)
+            resolve(undefined) // Don't throw, just log
+          }
+        }, delaySeconds * 1000)
+      })
+      
+      return { 
+        success: true, 
+        message: `Test notification scheduled for ${delaySeconds} seconds. You can close the browser now!`,
+        taskCount,
+        delaySeconds
+      }
+    } else {
+      // Send immediately
+      await messaging.send(message)
+      
+      return { 
+        success: true, 
+        message: 'Test notification sent successfully!',
+        taskCount 
+      }
     }
   } catch (error: any) {
     console.error('Error sending test notification:', error)

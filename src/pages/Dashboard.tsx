@@ -675,16 +675,16 @@ export default function Dashboard() {
                           if (!functions) throw new Error('Functions not initialized')
                           
                           const testNotification = httpsCallable(functions, 'testPushNotification')
-                          const result = await testNotification({ taskCount: 1 })
-                          toast.success((result.data as any).message || 'Push notification sent!')
+                          const result = await testNotification({ taskCount: 1, delaySeconds: 10 })
+                          toast.success((result.data as any).message || 'Push notification scheduled!')
                         } catch (error: any) {
                           toast.error(`Failed: ${error.message || 'Unknown error'}`)
                         }
                       }}
                       className="px-3 py-1.5 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 whitespace-nowrap text-left w-full"
-                      title="Test FCM push notification via Cloud Function (1 task)"
+                      title="Test FCM push notification in 10 seconds (close browser to test)"
                     >
-                      🧪 Test Push (1 task)
+                      🧪 Test Push (10s delay)
                     </button>
                     <button
                       onClick={async () => {
@@ -698,16 +698,16 @@ export default function Dashboard() {
                           if (!functions) throw new Error('Functions not initialized')
                           
                           const testNotification = httpsCallable(functions, 'testPushNotification')
-                          const result = await testNotification({ taskCount: 5 })
-                          toast.success((result.data as any).message || 'Push notification sent!')
+                          const result = await testNotification({ taskCount: 5, delaySeconds: 10 })
+                          toast.success((result.data as any).message || 'Push notification scheduled!')
                         } catch (error: any) {
                           toast.error(`Failed: ${error.message || 'Unknown error'}`)
                         }
                       }}
                       className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 whitespace-nowrap text-left w-full"
-                      title="Test FCM push notification via Cloud Function (5 tasks)"
+                      title="Test FCM push notification with 5 tasks in 10 seconds"
                     >
-                      🧪 Test Push (5 tasks)
+                      🧪 Test Push (5 tasks, 10s)
                     </button>
                   </div>
                 )}
