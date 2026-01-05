@@ -164,35 +164,11 @@ Return ONLY a JSON array in this exact format:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
-    let result, response, text
-    const modelNames = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
-    let lastError: any = null
-    
-    for (const modelName of modelNames) {
-      try {
-        console.log(`Trying model: ${modelName}`)
-        const currentModel = genAI.getGenerativeModel({ model: modelName })
-        result = await currentModel.generateContent(prompt)
-        response = result.response
-        text = response.text()
-        console.log(`Successfully used model: ${modelName}`)
-        break // Success, exit loop
-      } catch (apiError: any) {
-        console.error(`Model ${modelName} failed:`, apiError.message)
-        lastError = apiError
-        // Continue to next model
-        continue
-      }
-    }
-    
-    // If all models failed, throw error
-    if (!text) {
-      console.error('All models failed. Last error:', lastError?.message)
-      throw new functions.https.HttpsError(
-        'failed-precondition', 
-        `Gemini API error: All model attempts failed. Last error: ${lastError?.message || 'Unknown error'}. Please check your API key and model availability.`
-      )
-    }
+    // Use gemini-1.5-flash (current recommended model, fastest and cheapest)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const result = await model.generateContent(prompt)
+    const response = result.response
+    const text = response.text()
 
     // Check if response is empty
     if (!text || text.trim().length === 0) {
@@ -400,35 +376,11 @@ Return ONLY a JSON object in this exact format:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON object.`
 
-    let result, response, text
-    const modelNames = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
-    let lastError: any = null
-    
-    for (const modelName of modelNames) {
-      try {
-        console.log(`Trying model: ${modelName}`)
-        const currentModel = genAI.getGenerativeModel({ model: modelName })
-        result = await currentModel.generateContent(prompt)
-        response = result.response
-        text = response.text()
-        console.log(`Successfully used model: ${modelName}`)
-        break // Success, exit loop
-      } catch (apiError: any) {
-        console.error(`Model ${modelName} failed:`, apiError.message)
-        lastError = apiError
-        // Continue to next model
-        continue
-      }
-    }
-    
-    // If all models failed, throw error
-    if (!text) {
-      console.error('All models failed. Last error:', lastError?.message)
-      throw new functions.https.HttpsError(
-        'failed-precondition', 
-        `Gemini API error: All model attempts failed. Last error: ${lastError?.message || 'Unknown error'}. Please check your API key and model availability.`
-      )
-    }
+    // Use gemini-1.5-flash (current recommended model, fastest and cheapest)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const result = await model.generateContent(prompt)
+    const response = result.response
+    const text = response.text()
 
     // Parse JSON from response
     let jsonText = text.trim()
@@ -531,35 +483,11 @@ Return ONLY a JSON array of strings:
 
 Do not include any markdown formatting, code blocks, or extra text. Just the JSON array.`
 
-    let result, response, text
-    const modelNames = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
-    let lastError: any = null
-    
-    for (const modelName of modelNames) {
-      try {
-        console.log(`Trying model: ${modelName}`)
-        const currentModel = genAI.getGenerativeModel({ model: modelName })
-        result = await currentModel.generateContent(prompt)
-        response = result.response
-        text = response.text()
-        console.log(`Successfully used model: ${modelName}`)
-        break // Success, exit loop
-      } catch (apiError: any) {
-        console.error(`Model ${modelName} failed:`, apiError.message)
-        lastError = apiError
-        // Continue to next model
-        continue
-      }
-    }
-    
-    // If all models failed, throw error
-    if (!text) {
-      console.error('All models failed. Last error:', lastError?.message)
-      throw new functions.https.HttpsError(
-        'failed-precondition', 
-        `Gemini API error: All model attempts failed. Last error: ${lastError?.message || 'Unknown error'}. Please check your API key and model availability.`
-      )
-    }
+    // Use gemini-1.5-flash (current recommended model, fastest and cheapest)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const result = await model.generateContent(prompt)
+    const response = result.response
+    const text = response.text()
 
     // Parse JSON from response
     let jsonText = text.trim()
