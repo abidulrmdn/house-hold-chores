@@ -93,9 +93,15 @@ export default function Tutorial() {
     const element = document.querySelector(step.target) as HTMLElement
     setTargetElement(element)
 
-    // Scroll element into view if needed
+    // Scroll element into view if needed (with mobile-friendly options)
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Use 'nearest' for mobile to avoid excessive scrolling
+      const isMobile = window.innerWidth < 640
+      element.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: isMobile ? 'nearest' : 'center',
+        inline: 'nearest'
+      })
     }
   }, [isActive, currentStep])
 
@@ -137,8 +143,9 @@ export default function Tutorial() {
     const scrollX = window.scrollX
     const viewportHeight = window.innerHeight
     const viewportWidth = window.innerWidth
-    const tooltipHeight = 200 // Approximate tooltip height
-    const tooltipWidth = 384 // max-w-sm = 384px
+    const isMobile = viewportWidth < 640
+    const tooltipHeight = isMobile ? 150 : 200 // Smaller on mobile
+    const tooltipWidth = isMobile ? Math.min(viewportWidth - 40, 320) : 384 // Responsive width
 
     // Determine best position based on available space
     let finalPosition = step.position
@@ -257,51 +264,59 @@ export default function Tutorial() {
       {/* Tooltip */}
       <div
         ref={tooltipRef}
-        className="fixed z-[10002] bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 max-w-sm flex flex-col"
+        className="fixed z-[10002] bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-4 sm:p-6 max-w-[90vw] sm:max-w-sm flex flex-col"
         style={{
           ...tooltipStyle,
           maxHeight: 'calc(100vh - 40px)',
-          maxWidth: 'calc(100vw - 40px)'
+          maxWidth: 'calc(100vw - 40px)',
+          // Ensure tooltip stays within viewport on mobile
+          ...(step.target === 'manual' ? {
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            position: 'fixed'
+          } : {})
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+        <div className="flex items-start justify-between mb-3 sm:mb-4">
+          <div className="flex-1 pr-2">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 sm:mb-2">
               {step.title}
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
               {step.content}
             </p>
           </div>
           <button
             onClick={handleSkip}
-            className="ml-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-0">
+          <div className="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
             Step {currentStep + 1} of {TUTORIAL_STEPS.length}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 justify-end">
             {!isFirstStep && (
               <button
                 onClick={handlePrevious}
-                className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
+                className="px-3 py-1.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
               >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
+                <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Previous</span>
+                <span className="sm:hidden">Prev</span>
               </button>
             )}
             <button
               onClick={isLastStep ? handleComplete : handleNext}
-              className="px-4 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-1"
+              className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-1"
             >
               {isLastStep ? 'Get Started' : 'Next'}
-              {!isLastStep && <ChevronRight className="w-4 h-4" />}
+              {!isLastStep && <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />}
             </button>
           </div>
         </div>

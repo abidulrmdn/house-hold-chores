@@ -541,16 +541,6 @@ export default function Dashboard() {
                   <Moon className="w-5 h-5" />
                 )}
               </button>
-              {userData?.householdId && (
-                <button
-                  onClick={() => setIsInviteModalOpen(true)}
-                  className="hidden sm:flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs sm:text-sm font-medium"
-                  title="Invite to household"
-                >
-                  <Users className="w-4 h-4" />
-                  <span className="hidden sm:inline">Invite</span>
-                </button>
-              )}
               <div className="relative group">
                 <button
                   onClick={async () => {
@@ -762,6 +752,46 @@ export default function Dashboard() {
                         <Tag className="w-4 h-4" />
                         Manage Categories
                       </button>
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                      <button
+                        onClick={() => {
+                          setIsInviteModalOpen(true)
+                          setIsSettingsOpen(false)
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <Users className="w-4 h-4" />
+                        Invite to Household
+                      </button>
+                      {import.meta.env.DEV && (
+                        <>
+                          <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                if (notificationStatus !== 'enabled') {
+                                  toast.error('Please enable notifications first!')
+                                  return
+                                }
+                                const { httpsCallable } = await import('firebase/functions')
+                                const { functions } = await import('@/firebase/config')
+                                if (!functions) throw new Error('Functions not initialized')
+                                
+                                const testNotification = httpsCallable(functions, 'testPushNotification')
+                                const result = await testNotification({ taskCount: 1, delaySeconds: 10 })
+                                toast.success((result.data as any).message || 'Push notification scheduled!')
+                                setIsSettingsOpen(false)
+                              } catch (error: any) {
+                                toast.error(`Failed: ${error.message || 'Unknown error'}`)
+                              }
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                          >
+                            <Bell className="w-4 h-4" />
+                            Test Notification (10s)
+                          </button>
+                        </>
+                      )}
                       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
                         onClick={handleLeaveHousehold}
