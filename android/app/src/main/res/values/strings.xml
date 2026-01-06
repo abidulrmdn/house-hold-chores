@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Household Routine Manager</string>
+    <string name="title_activity_main">Household Routine Manager</string>
+    <string name="package_name">com.household.routinemanager</string>
+    <string name="custom_url_scheme">com.household.routinemanager</string>
+</resources>

@@ -19,6 +19,26 @@ body {
   min-height: 100vh;
 }
 
+/* Safe area insets for mobile devices (notch, status bar, etc.) */
+@supports (padding: max(0px)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Ensure header respects safe area */
+header {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+/* Ensure bottom toolbar respects safe area */
+.mobile-toolbar-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
 @keyframes slide-up {
   from {
     transform: translateY(100%);
@@ -105,5 +125,16 @@ body {
 
 .animate-icon-appear {
   animation: icon-appear 0.6s ease-out;
+}
+
+/* Hide scrollbar for webkit browsers */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for Firefox */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 

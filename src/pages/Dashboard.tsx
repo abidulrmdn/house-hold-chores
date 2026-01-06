@@ -69,7 +69,9 @@ export default function Dashboard() {
   const [isLanguageSelectorOpen, setIsLanguageSelectorOpen] = useState(false)
   const [showMobileAI, setShowMobileAI] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [showTabs, setShowTabs] = useState(false) // Toggle for tabs visibility on mobile - off by default
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
   const [settingsMenuPosition, setSettingsMenuPosition] = useState<{ top: number; right?: number; left?: number } | null>(null)
   const { theme, setTheme, effectiveTheme } = useThemeStore()
   const { direction } = useLanguageStore()
@@ -218,18 +220,33 @@ export default function Dashboard() {
     if (isSettingsOpen && settingsButtonRef.current) {
       const button = settingsButtonRef.current
       const rect = button.getBoundingClientRect()
-      const scrollY = window.scrollY
-      const scrollX = window.scrollX
+      const scrollY = window.scrollY || window.pageYOffset
+      const scrollX = window.scrollX || window.pageXOffset
+      
+      // Estimate menu height (approximate, will adjust if needed)
+      const estimatedMenuHeight = 500 // Approximate height for long menu
+      const viewportHeight = window.innerHeight
+      const spaceBelow = viewportHeight - rect.bottom
+      const spaceAbove = rect.top
+      
+      // If not enough space below, position above the button
+      let topPosition = rect.bottom + scrollY + 8
+      if (spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow) {
+        topPosition = rect.top + scrollY - estimatedMenuHeight - 8
+      }
+      
+      // Ensure menu doesn't go off-screen
+      topPosition = Math.max(8, Math.min(topPosition, viewportHeight + scrollY - estimatedMenuHeight - 8))
       
       if (direction === 'rtl') {
         setSettingsMenuPosition({
-          top: rect.bottom + scrollY + 8,
-          left: rect.left + scrollX
+          top: topPosition,
+          left: Math.max(8, rect.left + scrollX)
         })
       } else {
         setSettingsMenuPosition({
-          top: rect.bottom + scrollY + 8,
-          right: window.innerWidth - rect.right - scrollX
+          top: topPosition,
+          right: Math.max(8, window.innerWidth - rect.right - scrollX)
         })
       }
     } else {
@@ -250,6 +267,28 @@ export default function Dashboard() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isSettingsOpen])
+
+  // Fix tabs positioning on desktop - set sticky top below search bar
+  useEffect(() => {
+    const handleResize = () => {
+      if (tabsRef.current) {
+        if (window.matchMedia('(min-width: 640px)').matches) {
+          // Desktop: set sticky positioning below search bar (header 4rem + search bar ~6rem with reduced padding)
+          tabsRef.current.style.top = 'calc(4rem + 6rem)'
+          tabsRef.current.style.left = 'auto'
+          tabsRef.current.style.right = 'auto'
+        } else {
+          // Mobile: keep fixed positioning
+          tabsRef.current.style.top = showTabs ? 'calc(4rem + env(safe-area-inset-top, 0px))' : '-100%'
+          tabsRef.current.style.left = '0'
+          tabsRef.current.style.right = '0'
+        }
+      }
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [showTabs])
 
   const handleSignOut = async () => {
     try {
@@ -577,7 +616,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 transition-colors overflow-hidden">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 fixed top-0 left-0 right-0 z-50 transition-colors overflow-hidden safe-area-top">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between min-h-16 py-2 sm:py-0 sm:h-16 gap-2 sm:gap-4 overflow-hidden">
             <div className="flex-1 min-w-0">
@@ -587,13 +626,13 @@ export default function Dashboard() {
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">Routine Manager</p>
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              {/* Dark Mode Toggle */}
+              {/* Dark Mode Toggle - Hidden on mobile, shown on desktop */}
               <button
                 onClick={() => {
                   const newTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark'
                   setTheme(newTheme)
                 }}
-                className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 flex-shrink-0"
+                className="hidden sm:flex p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 flex-shrink-0"
                 title={`Theme: ${theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light'}`}
               >
                 {effectiveTheme === 'dark' ? (
@@ -602,7 +641,8 @@ export default function Dashboard() {
                   <Moon className="w-5 h-5" />
                 )}
               </button>
-              <div className="relative group">
+              {/* Bell/Notifications - Hidden on mobile, shown on desktop */}
+              <div className="relative group hidden sm:block">
                 <button
                   onClick={async () => {
                     try {
@@ -780,20 +820,35 @@ export default function Dashboard() {
                   className="sm:hidden w-8 h-8 rounded-full flex-shrink-0"
                 />
               )}
-              {userData?.householdId && (
-                <div className="relative settings-dropdown flex-shrink-0">
+              <div className="relative settings-dropdown flex-shrink-0">
+                <button
+                  ref={settingsButtonRef}
+                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                  className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
+                  title="Settings"
+                  data-tutorial="settings"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+                
+                {/* Tabs Toggle Button - Mobile only */}
+                {userData?.householdId && (
                   <button
-                    ref={settingsButtonRef}
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100"
-                    title="Settings"
-                    data-tutorial="settings"
+                    onClick={() => setShowTabs(!showTabs)}
+                    className={`sm:hidden p-2 rounded-lg transition-colors flex-shrink-0 ${
+                      showTabs 
+                        ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20' 
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100'
+                    }`}
+                    title={showTabs ? 'Hide view tabs' : 'Show view tabs'}
                   >
-                    <Settings className="w-5 h-5" />
+                    <Calendar className="w-5 h-5" />
                   </button>
+                )}
+                  
                   {isSettingsOpen && settingsMenuPosition && createPortal(
                     <div 
-                      className="settings-menu-portal fixed w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-[100] overflow-hidden"
+                      className="settings-menu-portal fixed w-56 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-[9999] max-h-[calc(100vh-2rem)] overflow-y-auto"
                       style={{
                         top: `${settingsMenuPosition.top}px`,
                         ...(direction === 'rtl' 
@@ -813,6 +868,102 @@ export default function Dashboard() {
                         {t('profile.profile')}
                       </button>
                       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                      {/* Notifications/Bell - Mobile only */}
+                      <button
+                        onClick={async () => {
+                          setIsSettingsOpen(false)
+                          try {
+                            // Check if VAPID key is configured (for debugging)
+                            const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
+                            
+                            // First try to enable push notifications (requires VAPID key)
+                            const token = await requestNotificationPermission()
+                            if (token && user?.uid) {
+                              setNotificationStatus('enabled')
+                              // Save token to Firestore for Cloud Functions
+                              try {
+                                const { doc: docFn, updateDoc: updateDocFn } = await import('firebase/firestore')
+                                const { db } = await import('@/firebase/config')
+                                if (db) {
+                                  await updateDocFn(docFn(db, 'users', user.uid), {
+                                    fcmToken: token,
+                                    notificationEnabled: true
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Error saving FCM token:', error)
+                              }
+                              toast.success('Push notifications enabled! You\'ll receive daily notifications at 8 AM.')
+                            } else {
+                              // Check if VAPID key is configured
+                              if (!vapidKey || vapidKey === 'demo-vapid-key' || vapidKey.trim() === '') {
+                                setNotificationStatus('disabled')
+                                toast('VAPID key not configured. Please add VITE_FIREBASE_VAPID_KEY to your .env file and restart the dev server.', { icon: 'ℹ️' })
+                              } else {
+                                // VAPID key is set but token request failed
+                                if (Notification.permission === 'granted') {
+                                  setNotificationStatus('disabled')
+                                  toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                                } else if (Notification.permission === 'default') {
+                                  const permission = await Notification.requestPermission()
+                                  if (permission === 'granted') {
+                                    // Retry getting token after permission granted
+                                    const retryToken = await requestNotificationPermission()
+                                    if (retryToken) {
+                                      setNotificationStatus('enabled')
+                                      toast.success('Push notifications enabled!')
+                                    } else {
+                                      setNotificationStatus('disabled')
+                                      toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                                    }
+                                  } else {
+                                    setNotificationStatus('disabled')
+                                    toast.error('Notification permission denied')
+                                  }
+                                } else {
+                                  setNotificationStatus('disabled')
+                                  toast.error('Notifications blocked. Please enable in browser settings.')
+                                }
+                              }
+                            }
+                          } catch (error: any) {
+                            console.error('Notification error:', error)
+                            setNotificationStatus('disabled')
+                            toast.error(`Failed to enable notifications: ${error.message}`)
+                          }
+                        }}
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:hidden relative"
+                      >
+                        <Bell className="w-4 h-4" />
+                        <span>Notifications</span>
+                        {notificationStatus === 'enabled' && (
+                          <span className="ml-auto w-2 h-2 bg-green-500 rounded-full"></span>
+                        )}
+                        {notificationStatus === 'disabled' && (
+                          <span className="ml-auto w-2 h-2 bg-gray-400 rounded-full"></span>
+                        )}
+                      </button>
+                      {/* Dark Mode Toggle - Mobile only */}
+                      <button
+                        onClick={() => {
+                          const newTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark'
+                          setTheme(newTheme)
+                          setIsSettingsOpen(false)
+                        }}
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:hidden"
+                      >
+                        {effectiveTheme === 'dark' ? (
+                          <>
+                            <Sun className="w-4 h-4" />
+                            Light Mode
+                          </>
+                        ) : (
+                          <>
+                            <Moon className="w-4 h-4" />
+                            Dark Mode
+                          </>
+                        )}
+                      </button>
                       <button
                         onClick={() => {
                           setIsLanguageSelectorOpen(!isLanguageSelectorOpen)
@@ -860,17 +1011,41 @@ export default function Dashboard() {
                         <Sparkles className="w-4 h-4" />
                         {t('dashboard.setupWizard')}
                       </button>
-                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-                      <button
-                        onClick={() => {
-                          setIsInviteModalOpen(true)
-                          setIsSettingsOpen(false)
-                        }}
-                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                      >
-                        <Users className="w-4 h-4" />
-                        {t('household.inviteMembers')}
-                      </button>
+                      {userData?.householdId && (
+                        <>
+                          <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                          <button
+                            onClick={() => {
+                              setIsInviteModalOpen(true)
+                              setIsSettingsOpen(false)
+                            }}
+                            className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                          >
+                            <Users className="w-4 h-4" />
+                            {t('household.inviteMembers')}
+                          </button>
+                          <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                          <button
+                            onClick={handleLeaveHousehold}
+                            className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            {t('dashboard.leaveHousehold')}
+                          </button>
+                        </>
+                      )}
+                      {!userData?.householdId && (
+                        <>
+                          <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                          <button
+                            onClick={handleCreateNewHousehold}
+                            className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                          >
+                            <Home className="w-4 h-4" />
+                            {t('dashboard.createNewHousehold')}
+                          </button>
+                        </>
+                      )}
                       {import.meta.env.DEV && (
                         <>
                           <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
@@ -902,30 +1077,19 @@ export default function Dashboard() {
                       )}
                       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
-                        onClick={handleLeaveHousehold}
-                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        onClick={() => {
+                          handleSignOut()
+                          setIsSettingsOpen(false)
+                        }}
+                        className="w-full px-4 py-2 text-start text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
                       >
                         <LogOut className="w-4 h-4" />
-                        {t('dashboard.leaveHousehold')}
-                      </button>
-                      <button
-                        onClick={handleCreateNewHousehold}
-                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                      >
-                        <Home className="w-4 h-4" />
-                        {t('dashboard.createNewHousehold')}
+                        {t('auth.signOut')}
                       </button>
                     </div>,
                     document.body
                   )}
-                </div>
-              )}
-              <button
-                onClick={handleSignOut}
-                className="hidden sm:block text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 whitespace-nowrap"
-              >
-                {t('auth.signOut')}
-              </button>
+              </div>
             </div>
           </div>
         </div>
@@ -954,9 +1118,9 @@ export default function Dashboard() {
         isAIVisible={showMobileAI}
       />
 
-      {/* Search and Filters Bar - Desktop only */}
-      <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-16 z-40" data-tutorial="search">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+      {/* Search and Filters Bar - Desktop only - Sticky right after header */}
+      <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky z-30" data-tutorial="search" style={{ top: '4rem' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-0">
           <div className="flex flex-col sm:flex-row gap-3">
             {/* Search Bar */}
             <div className="flex-1 relative">
@@ -993,7 +1157,7 @@ export default function Dashboard() {
           </div>
           
           {/* Quick Filters */}
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div className="flex flex-wrap gap-2 mt-2 pb-2">
             <button
               onClick={() => setQuickFilter(quickFilter === 'overdue' ? null : 'overdue')}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
@@ -1081,8 +1245,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-[112px] sm:top-[120px] z-40">
+      {/* Tabs - Desktop: sticky below search bar, Mobile: fixed with toggle */}
+      <div 
+        ref={tabsRef}
+        className={`bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-40 transition-all duration-300 ${
+          showTabs ? 'translate-y-0' : '-translate-y-full'
+        } fixed left-0 right-0 sm:translate-y-0 sm:relative sm:sticky sm:left-auto sm:right-auto`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-1 overflow-x-auto" data-tutorial="tabs">
             {tabs.map(tab => {
@@ -1115,8 +1284,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content - Add top padding to account for fixed header + search bar + tabs on desktop */}
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 sm:pb-8 transition-all duration-300 ${showTabs ? 'pt-32' : 'pt-20'} sm:pt-40`}>
         {/* Smart Insights - Hidden on mobile (accessible via toolbar) */}
         <div className="hidden sm:block ai-section">
           {userData?.householdId && tasks.length > 0 && (
@@ -1181,77 +1350,80 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Clear All Today Button */}
-        {activeTab === 'today' && userData?.householdId && user && (() => {
-          const todayTasks = tasks.filter(t => 
-            isToday(new Date(t.dueDate)) && !t.isCompleted && t.assignedTo === user.uid
-          )
-          const incompleteCount = todayTasks.length
-          
-          if (incompleteCount === 0) return null
-          
-          return (
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={async () => {
-                    if (!user) {
-                      toast.error('Please sign in to complete tasks')
-                      return
-                    }
-                    
-                    if (window.confirm(`Mark all ${incompleteCount} incomplete task${incompleteCount > 1 ? 's' : ''} assigned to you as complete?`)) {
-                      try {
-                        const promises = todayTasks.map(task => 
-                          completeTask(task.id, user.uid).catch(err => {
-                            console.error(`Error completing task ${task.id}:`, err)
-                            return null
-                          })
-                        )
-                        await Promise.all(promises)
-                        toast.success(`Completed ${incompleteCount} task${incompleteCount > 1 ? 's' : ''}!`)
-                      } catch (error: any) {
-                        console.error('Error completing tasks:', error)
-                        toast.error('Failed to complete some tasks')
-                      }
-                    }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors dark:bg-green-500 dark:hover:bg-green-600"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {t('dashboard.clearMyToday')} ({incompleteCount})
-                </button>
-              </div>
-            </div>
-          )
-        })()}
-        
-        {/* User Filter */}
-        {userData?.householdId && householdUsers.length > 1 && (
-          <div className="mb-4 flex items-center gap-3">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by person:</label>
-            <select
-              value={userFilter || ''}
-              onChange={(e) => setUserFilter(e.target.value || null)}
-              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-            >
-              <option value="">All People</option>
-              {householdUsers.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.displayName || user.email || user.id} {user.id === userData?.id ? '(You)' : ''}
-                </option>
-              ))}
-            </select>
-            {userFilter && (
+        {/* Combined Controls Row - Clear Today, User Filter, etc. */}
+        <div className="mb-4 mt-6 sm:mt-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+          {/* Clear All Today Button */}
+          {activeTab === 'today' && userData?.householdId && user && (() => {
+            const todayTasks = tasks.filter(t => 
+              isToday(new Date(t.dueDate)) && !t.isCompleted && t.assignedTo === user.uid
+            )
+            const incompleteCount = todayTasks.length
+            
+            if (incompleteCount === 0) return null
+            
+            return (
               <button
-                onClick={() => setUserFilter(null)}
-                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                onClick={async () => {
+                  if (!user) {
+                    toast.error('Please sign in to complete tasks')
+                    return
+                  }
+                  
+                  if (window.confirm(`Mark all ${incompleteCount} incomplete task${incompleteCount > 1 ? 's' : ''} assigned to you as complete?`)) {
+                    try {
+                      const promises = todayTasks.map(task => 
+                        completeTask(task.id, user.uid).catch(err => {
+                          console.error(`Error completing task ${task.id}:`, err)
+                          return null
+                        })
+                      )
+                      await Promise.all(promises)
+                      toast.success(`Completed ${incompleteCount} task${incompleteCount > 1 ? 's' : ''}!`)
+                    } catch (error: any) {
+                      console.error('Error completing tasks:', error)
+                      toast.error('Failed to complete some tasks')
+                    }
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors dark:bg-green-500 dark:hover:bg-green-600 whitespace-nowrap flex-shrink-0"
               >
-                Clear
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="hidden sm:inline">{t('dashboard.clearMyToday')}</span>
+                <span className="sm:hidden">{t('dashboard.clearMyToday')}</span>
+                <span>({incompleteCount})</span>
               </button>
-            )}
-          </div>
-        )}
+            )
+          })()}
+          
+          {/* User Filter */}
+          {userData?.householdId && householdUsers.length > 1 && (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap hidden sm:inline">Filter by person:</label>
+              <label className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap sm:hidden">Person:</label>
+              <select
+                value={userFilter || ''}
+                onChange={(e) => setUserFilter(e.target.value || null)}
+                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              >
+                <option value="">All People</option>
+                {householdUsers.map(user => (
+                  <option key={user.id} value={user.id}>
+                    {user.displayName || user.email || user.id} {user.id === userData?.id ? '(You)' : ''}
+                  </option>
+                ))}
+              </select>
+              {userFilter && (
+                <button
+                  onClick={() => setUserFilter(null)}
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 flex-shrink-0 px-2"
+                  title="Clear filter"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         {activeTab === 'stats' ? (
           <StatisticsDashboard
             tasks={tasks}
@@ -1366,7 +1538,7 @@ export default function Dashboard() {
       {userData?.householdId && activeTab !== 'stats' && activeTab !== 'calendar' && (
         <button
           onClick={() => setIsModalOpen(true)}
-          className="fixed bottom-6 right-6 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all z-40 flex items-center justify-center group"
+          className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all z-50 flex items-center justify-center group"
           title="Create new routine (N)"
           data-tutorial="create-button"
         >

@@ -1,0 +1,133 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- House silhouette -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20L30,40L30,80L78,80L78,40Z" />
+    
+    <!-- Roof -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20L30,40L78,40Z" />
+    
+    <!-- Door -->
+    <path
+        android:fillColor="#4A90E2"
+        android:pathData="M48,65L48,80L60,80L60,65Z" />
+    
+    <!-- Door handle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 55.5,72.5 A 1.5,1.5 0 1,1 58.5,72.5 A 1.5,1.5 0 1,1 55.5,72.5" />
+    
+    <!-- Window left -->
+    <path
+        android:fillColor="#4A90E2"
+        android:pathData="M36,50L36,60L44,60L44,50Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M40,50L40,60M36,55L44,55" />
+    
+    <!-- Window right -->
+    <path
+        android:fillColor="#4A90E2"
+        android:pathData="M64,50L64,60L72,60L72,50Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M68,50L68,60M64,55L72,55" />
+    
+    <!-- Circular repeat arrows (representing repetitive chores) -->
+    <!-- Arrow 1 (top) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,8L50,12L52,12L52,16L56,16L56,12L58,12Z" />
+    
+    <!-- Arrow 2 (right) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M100,54L96,50L96,52L92,52L92,56L96,56L96,58Z" />
+    
+    <!-- Arrow 3 (bottom) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,100L58,96L56,96L56,92L52,92L52,96L50,96Z" />
+    
+    <!-- Arrow 4 (left) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,54L12,58L12,56L16,56L16,52L12,52L12,50Z" />
+    
+    <!-- Diagonal arrows for circular pattern -->
+    <!-- Arrow 5 (top-right) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.8"
+        android:pathData="M88,20L92,24L90,24L90,28L86,28L86,24L84,24Z" />
+    
+    <!-- Arrow 6 (bottom-right) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.8"
+        android:pathData="M88,88L84,92L86,92L86,96L90,96L90,92L92,92Z" />
+    
+    <!-- Arrow 7 (bottom-left) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.8"
+        android:pathData="M20,88L24,84L22,84L22,80L18,80L18,84L16,84Z" />
+    
+    <!-- Arrow 8 (top-left) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.8"
+        android:pathData="M20,20L16,24L18,24L18,28L22,28L22,24L24,24Z" />
+    
+    <!-- Small chore symbols around the house -->
+    <!-- Broom (top-left area) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M20,30L20,32L28,32L28,30Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M24,28L24,34L26,34L26,28Z" />
+    
+    <!-- Dish/plate (top-right area) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M 85,30 A 3,3 0 1,1 91,30 A 3,3 0 1,1 85,30" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:strokeAlpha="0.7"
+        android:pathData="M85,30L91,30" />
+    
+    <!-- Laundry symbol (bottom-right area) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M85,78L85,82L91,82L91,78Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M87,78L87,82L89,82L89,78Z" />
+    
+    <!-- Vacuum symbol (bottom-left area) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M 20.5,78 A 2.5,2.5 0 1,1 25.5,78 A 2.5,2.5 0 1,1 20.5,78" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.7"
+        android:pathData="M23,75.5L23,80.5" />
+</vector>

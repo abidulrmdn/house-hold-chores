@@ -13,7 +13,7 @@ export default defineConfig({
         name: 'Household Routine Manager',
         short_name: 'Routine Manager',
         description: 'Manage household chores and routines with your family',
-        theme_color: '#6366f1',
+        theme_color: '#4A90E2',
         background_color: '#ffffff',
         display: 'standalone',
         icons: [

@@ -13,6 +13,7 @@ A Progressive Web App (PWA) for managing household chores and routines with your
 - 📅 **Smart Views**: Filter by today, this week, or all tasks
 - 🎨 **Beautiful UI**: Modern, responsive design with Tailwind CSS
 - 📱 **PWA**: Install as an app on your device
+- 🤖 **Android App**: Native Android app available (see Android guides)
 
 ## Tech Stack
 
@@ -27,6 +28,7 @@ A Progressive Web App (PWA) for managing household chores and routines with your
   - Cloud Messaging (Push Notifications)
   - Hosting
 - **PWA**: Vite PWA Plugin
+- **Mobile**: Capacitor (Android/iOS support)
 
 ## Setup Instructions
 
@@ -129,6 +131,24 @@ firebase deploy --only hosting
 
 Your app will be live at: `https://your-project-id.web.app`
 
+## Android App
+
+This PWA can be built as a native Android app using Capacitor!
+
+### Quick Start
+```bash
+# Build web app
+npm run build
+
+# Sync to Android
+npm run cap:sync
+
+# Open in Android Studio
+npm run cap:open:android
+```
+
+See **[ANDROID_QUICK_START.md](./ANDROID_QUICK_START.md)** for quick setup or **[ANDROID_BUILD_GUIDE.md](./ANDROID_BUILD_GUIDE.md)** for detailed instructions.
+
 ## What You Need to Do
 
 ### To Make This Public and Published:
@@ -155,6 +175,10 @@ Your app will be live at: `https://your-project-id.web.app`
    - Create `public/pwa-192x192.png` (192x192px)
    - Create `public/pwa-512x512.png` (512x512px)
    - These are referenced in the manifest
+
+6. **Android App** (Optional)
+   - Follow Android guides to build native app
+   - Publish to Google Play Store
 
 ## Best Practices & Ideas
 

@@ -34,3 +34,12 @@ dist-ssr
 firebase-debug.log
 firestore-debug.log
 
+# Capacitor / Android
+android/app/build
+android/.gradle
+android/.idea
+android/local.properties
+*.apk
+*.aab
+*.keystore
+

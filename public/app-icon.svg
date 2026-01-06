@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#4A90E2"/>
+  
+  <!-- Subtle circular pattern -->
+  <circle cx="256" cy="256" r="165" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="7"/>
+  <circle cx="256" cy="256" r="195" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="5"/>
+  
+  <!-- House silhouette -->
+  <path d="M256,100 L150,200 L150,350 L362,350 L362,200 Z" fill="#FFFFFF"/>
+  
+  <!-- Roof -->
+  <path d="M256,100 L150,200 L362,200 Z" fill="#FFFFFF"/>
+  
+  <!-- Door -->
+  <rect x="220" y="300" width="72" height="50" fill="#4A90E2"/>
+  
+  <!-- Door handle -->
+  <circle cx="280" cy="325" r="6" fill="#FFFFFF"/>
+  
+  <!-- Window left -->
+  <rect x="170" y="240" width="50" height="50" fill="#4A90E2"/>
+  <line x1="195" y1="240" x2="195" y2="290" stroke="#FFFFFF" stroke-width="3"/>
+  <line x1="170" y1="265" x2="220" y2="265" stroke="#FFFFFF" stroke-width="3"/>
+  
+  <!-- Window right -->
+  <rect x="292" y="240" width="50" height="50" fill="#4A90E2"/>
+  <line x1="317" y1="240" x2="317" y2="290" stroke="#FFFFFF" stroke-width="3"/>
+  <line x1="292" y1="265" x2="342" y2="265" stroke="#FFFFFF" stroke-width="3"/>
+  
+  <!-- Circular repeat arrows (representing repetitive chores) -->
+  <!-- Arrow 1 (top) -->
+  <path d="M256,50 L240,66 L248,66 L248,82 L264,82 L264,66 L272,66 Z" fill="#FFFFFF"/>
+  
+  <!-- Arrow 2 (right) -->
+  <path d="M462,256 L446,240 L446,248 L430,248 L430,264 L446,264 L446,272 Z" fill="#FFFFFF"/>
+  
+  <!-- Arrow 3 (bottom) -->
+  <path d="M256,462 L272,446 L264,446 L264,430 L248,430 L248,446 L240,446 Z" fill="#FFFFFF"/>
+  
+  <!-- Arrow 4 (left) -->
+  <path d="M50,256 L66,272 L66,264 L82,264 L82,248 L66,248 L66,240 Z" fill="#FFFFFF"/>
+  
+  <!-- Diagonal arrows -->
+  <path d="M410,100 L426,116 L418,116 L418,132 L402,132 L402,116 L394,116 Z" fill="#FFFFFF" opacity="0.8"/>
+  <path d="M410,412 L394,396 L402,396 L402,380 L418,380 L418,396 L426,396 Z" fill="#FFFFFF" opacity="0.8"/>
+  <path d="M102,412 L118,396 L110,396 L110,380 L94,380 L94,396 L86,396 Z" fill="#FFFFFF" opacity="0.8"/>
+  <path d="M102,100 L86,116 L94,116 L94,132 L110,132 L110,116 L118,116 Z" fill="#FFFFFF" opacity="0.8"/>
+  
+  <!-- Small chore symbols -->
+  <!-- Broom (top-left) -->
+  <rect x="100" y="140" width="40" height="8" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="118" y="132" width="4" height="24" fill="#FFFFFF" opacity="0.7"/>
+  
+  <!-- Dish/plate (top-right) -->
+  <circle cx="412" cy="140" r="12" fill="#FFFFFF" opacity="0.7"/>
+  <line x1="400" y1="140" x2="424" y2="140" stroke="#FFFFFF" stroke-width="2" opacity="0.7"/>
+  
+  <!-- Laundry symbol (bottom-right) -->
+  <rect x="390" y="370" width="30" height="20" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="398" y="370" width="4" height="20" fill="#FFFFFF" opacity="0.7"/>
+  
+  <!-- Vacuum symbol (bottom-left) -->
+  <circle cx="122" cy="370" r="10" fill="#FFFFFF" opacity="0.7"/>
+  <line x1="122" y1="360" x2="122" y2="380" stroke="#FFFFFF" stroke-width="4" opacity="0.7"/>
+</svg>
+

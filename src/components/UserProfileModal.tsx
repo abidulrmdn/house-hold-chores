@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, Upload, User as UserIcon, Mail } from 'lucide-react'
+import { X, Upload, User as UserIcon, Mail, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
-import { storage } from '@/firebase/config'
+import { storage, auth } from '@/firebase/config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { signOut } from 'firebase/auth'
 import { useTranslation } from '@/hooks/useTranslation'
 import toast from 'react-hot-toast'
 
@@ -12,13 +13,29 @@ interface UserProfileModalProps {
 }
 
 export default function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
-  const { user, userData, updateUserData, loadUserData } = useAuthStore()
+  const { user, userData, updateUserData, loadUserData, setUser } = useAuthStore()
   const [displayName, setDisplayName] = useState(userData?.displayName || '')
   const [isUploading, setIsUploading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(userData?.photoURL || null)
   const { t } = useTranslation()
+
+  const handleSignOut = async () => {
+    try {
+      if (!auth) {
+        toast.error('Not authenticated')
+        return
+      }
+      await signOut(auth)
+      setUser(null)
+      toast.success('Signed out successfully')
+      onClose()
+    } catch (error) {
+      console.error('Error signing out:', error)
+      toast.error('Failed to sign out')
+    }
+  }
 
   // Sync previewUrl with userData when it changes
   useEffect(() => {
@@ -276,6 +293,17 @@ export default function UserProfileModal({ isOpen, onClose }: UserProfileModalPr
               className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSaving ? t('profile.saving') : t('profile.saveChanges')}
+            </button>
+          </div>
+
+          {/* Sign Out Section */}
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={handleSignOut}
+              className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              {t('auth.signOut')}
             </button>
           </div>
         </div>
