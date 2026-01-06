@@ -44,10 +44,6 @@ export default function ImportModal({ isOpen, onClose, householdId }: ImportModa
     setSelectedService(serviceId)
   }
 
-  const handleBack = () => {
-    setSelectedService(null)
-  }
-
   const handleClose = () => {
     setSelectedService(null)
     onClose()
