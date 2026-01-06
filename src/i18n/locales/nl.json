@@ -443,6 +443,35 @@
     "rateLimitReached": "Snelheidslimiet bereikt. Probeer het over een paar minuten opnieuw.",
     "tryAgain": "Probeer Opnieuw",
     "addTask": "Voeg deze taak toe"
+  },
+  "import": {
+    "import": "Importeren",
+    "importFrom": "Taken Importeren",
+    "importFromTickTick": "Importeren vanuit TickTick",
+    "selectService": "Selecteer de service waarvan u wilt importeren:",
+    "infoTitle": "Over Importeren",
+    "infoDescription": "U kunt terugkerende taken importeren uit verschillende taakbeheerservices. Alleen taken met herhalingspatronen worden geïmporteerd als routines.",
+    "selectCSVFile": "Selecteer TickTick CSV Backup Bestand",
+    "clickToSelect": "Klik om CSV bestand te selecteren",
+    "onlyRecurringTasks": "Alleen terugkerende taken worden geïmporteerd",
+    "processing": "CSV bestand verwerken...",
+    "preview": "Voorvertoning",
+    "routines": "routines",
+    "howToExport": "Hoe te exporteren vanuit TickTick:",
+    "exportStep1": "Log in op TickTick web app",
+    "exportStep2": "Ga naar Instellingen → Backup & Importeren",
+    "exportStep3": "Klik op \"Backup Maken\" om CSV bestand te downloaden",
+    "exportStep4": "Upload het CSV bestand hier",
+    "learnMore": "Meer informatie",
+    "note": "Opmerking: Alleen taken met herhalingspatronen worden geïmporteerd als routines.",
+    "importComplete": "Importeren Voltooid!",
+    "successfullyImported": "Succesvol geïmporteerd",
+    "routine": "routine",
+    "routinesPlural": "routines",
+    "importing": "Importeren...",
+    "importButton": "Importeren",
+    "close": "Sluiten",
+    "cancel": "Annuleren"
   }
 }
 

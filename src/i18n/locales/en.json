@@ -443,6 +443,35 @@
     "rateLimitReached": "Rate limit reached. Please try again in a few minutes.",
     "tryAgain": "Try Again",
     "addTask": "Add this task"
+  },
+  "import": {
+    "import": "Import",
+    "importFrom": "Import Tasks",
+    "importFromTickTick": "Import from TickTick",
+    "selectService": "Select the service you want to import from:",
+    "infoTitle": "About Importing",
+    "infoDescription": "You can import recurring tasks from various task management services. Only tasks with recurrence patterns will be imported as routines.",
+    "selectCSVFile": "Select TickTick CSV Backup File",
+    "clickToSelect": "Click to select CSV file",
+    "onlyRecurringTasks": "Only recurring tasks will be imported",
+    "processing": "Processing CSV file...",
+    "preview": "Preview",
+    "routines": "routines",
+    "howToExport": "How to export from TickTick:",
+    "exportStep1": "Log in to TickTick web app",
+    "exportStep2": "Go to Settings → Backup & Import",
+    "exportStep3": "Click \"Create Backup\" to download CSV file",
+    "exportStep4": "Upload the CSV file here",
+    "learnMore": "Learn more",
+    "note": "Note: Only tasks with recurrence patterns will be imported as routines.",
+    "importComplete": "Import Complete!",
+    "successfullyImported": "Successfully imported",
+    "routine": "routine",
+    "routinesPlural": "routines",
+    "importing": "Importing...",
+    "importButton": "Import",
+    "close": "Close",
+    "cancel": "Cancel"
   }
 }
 

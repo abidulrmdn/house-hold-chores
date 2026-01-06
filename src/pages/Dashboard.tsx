@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag, Search, Moon, Sun, ArrowUpDown, X, CheckCircle2, BarChart3, Info, Sparkles, Globe } from 'lucide-react'
+import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag, Search, Moon, Sun, ArrowUpDown, X, CheckCircle2, BarChart3, Info, Sparkles, Globe, FileText } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
@@ -14,6 +14,7 @@ import InviteModal from '@/components/InviteModal'
 import JoinHouseholdModal from '@/components/JoinHouseholdModal'
 import ManageCategoriesModal from '@/components/ManageCategoriesModal'
 import UserProfileModal from '@/components/UserProfileModal'
+import ImportModal from '@/components/ImportModal'
 import DayTasksModal from '@/components/DayTasksModal'
 import InstallPrompt from '@/components/InstallPrompt'
 import Tutorial from '@/components/Tutorial'
@@ -67,6 +68,7 @@ export default function Dashboard() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
   const [isLanguageSelectorOpen, setIsLanguageSelectorOpen] = useState(false)
   const [showMobileAI, setShowMobileAI] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const [settingsMenuPosition, setSettingsMenuPosition] = useState<{ top: number; right?: number; left?: number } | null>(null)
   const { theme, setTheme, effectiveTheme } = useThemeStore()
@@ -829,6 +831,17 @@ export default function Dashboard() {
                       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
                       <button
                         onClick={() => {
+                          setIsImportOpen(true)
+                          setIsSettingsOpen(false)
+                        }}
+                        className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <FileText className="w-4 h-4" />
+                        {t('import.import')}
+                      </button>
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                      <button
+                        onClick={() => {
                           setIsOnboardingOpen(true)
                           setIsSettingsOpen(false)
                         }}
@@ -1276,6 +1289,14 @@ export default function Dashboard() {
           }}
           householdId={userData.householdId}
           initialSuggestion={pendingSuggestion}
+        />
+      )}
+
+      {userData?.householdId && (
+        <ImportModal
+          isOpen={isImportOpen}
+          onClose={() => setIsImportOpen(false)}
+          householdId={userData.householdId}
         />
       )}
 

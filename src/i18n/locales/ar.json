@@ -443,6 +443,35 @@
     "rateLimitReached": "تم الوصول إلى حد المعدل. يرجى المحاولة مرة أخرى بعد بضع دقائق.",
     "tryAgain": "حاول مرة أخرى",
     "addTask": "أضف هذه المهمة"
+  },
+  "import": {
+    "import": "استيراد",
+    "importFrom": "استيراد المهام",
+    "importFromTickTick": "استيراد من TickTick",
+    "selectService": "حدد الخدمة التي تريد الاستيراد منها:",
+    "infoTitle": "حول الاستيراد",
+    "infoDescription": "يمكنك استيراد المهام المتكررة من خدمات إدارة المهام المختلفة. سيتم استيراد المهام التي تحتوي على أنماط تكرار فقط كروتينات.",
+    "selectCSVFile": "حدد ملف النسخ الاحتياطي CSV من TickTick",
+    "clickToSelect": "انقر لتحديد ملف CSV",
+    "onlyRecurringTasks": "سيتم استيراد المهام المتكررة فقط",
+    "processing": "معالجة ملف CSV...",
+    "preview": "معاينة",
+    "routines": "روتينات",
+    "howToExport": "كيفية التصدير من TickTick:",
+    "exportStep1": "قم بتسجيل الدخول إلى تطبيق TickTick على الويب",
+    "exportStep2": "انتقل إلى الإعدادات → النسخ الاحتياطي والاستيراد",
+    "exportStep3": "انقر على \"إنشاء نسخة احتياطية\" لتنزيل ملف CSV",
+    "exportStep4": "قم بتحميل ملف CSV هنا",
+    "learnMore": "معرفة المزيد",
+    "note": "ملاحظة: سيتم استيراد المهام التي تحتوي على أنماط تكرار فقط كروتينات.",
+    "importComplete": "اكتمل الاستيراد!",
+    "successfullyImported": "تم الاستيراد بنجاح",
+    "routine": "روتين",
+    "routinesPlural": "روتينات",
+    "importing": "جاري الاستيراد...",
+    "importButton": "استيراد",
+    "close": "إغلاق",
+    "cancel": "إلغاء"
   }
 }
 
