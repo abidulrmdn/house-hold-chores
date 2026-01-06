@@ -1285,7 +1285,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content - Add top padding to account for fixed header + search bar + tabs on desktop */}
-      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 sm:pb-8 transition-all duration-300 ${showTabs ? 'pt-32' : 'pt-20'} sm:pt-40`}>
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 sm:pb-8 transition-all duration-300 ${showTabs ? 'pt-32' : 'pt-20'} sm:pt-[6.5rem]`}>
         {/* Smart Insights - Hidden on mobile (accessible via toolbar) */}
         <div className="hidden sm:block ai-section">
           {userData?.householdId && tasks.length > 0 && (
