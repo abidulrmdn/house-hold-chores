@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { TaskInstance, Routine, User as UserType } from '@/types'
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, isSameDay, isToday, isPast, isFuture, subDays, eachDayOfInterval, startOfYear } from 'date-fns'
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, isSameDay, isToday, isPast, isFuture, subDays, eachDayOfInterval } from 'date-fns'
 import { TrendingUp, Calendar, Award, Users, CheckCircle2, Zap, Activity } from 'lucide-react'
 
 interface StatisticsDashboardProps {
@@ -395,7 +395,7 @@ export default function StatisticsDashboard({ tasks, routines, users, currentUse
         </h3>
         <div className="overflow-x-auto">
           <div className="flex gap-1 min-w-max">
-            {stats.heatmapData.map((day, index) => {
+            {stats.heatmapData.map((day) => {
               const bgColors = [
                 'bg-gray-100 dark:bg-gray-700', // 0 tasks
                 'bg-green-200 dark:bg-green-900', // 1 task
