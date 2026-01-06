@@ -11,6 +11,7 @@ interface AISuggestionsProps {
   tasks: TaskInstance[]
   householdId: string
   onSuggestionSelect: (suggestion: TaskSuggestion) => void
+  maxItems?: number // Optional limit for displayed suggestions
 }
 
 export default function AISuggestions({
@@ -18,7 +19,8 @@ export default function AISuggestions({
   categories,
   tasks,
   householdId,
-  onSuggestionSelect
+  onSuggestionSelect,
+  maxItems
 }: AISuggestionsProps) {
   const [suggestions, setSuggestions] = useState<TaskSuggestion[]>([])
   const [loading, setLoading] = useState(false)
@@ -80,7 +82,7 @@ export default function AISuggestions({
 
       {isExpanded && !loading && suggestions.length > 0 && (
         <div className="space-y-3">
-          {suggestions.map((suggestion, index) => (
+          {(maxItems ? suggestions.slice(0, maxItems) : suggestions).map((suggestion, index) => (
             <div
               key={index}
               className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-700 transition-colors"
@@ -110,12 +112,14 @@ export default function AISuggestions({
               </div>
             </div>
           ))}
-          <button
-            onClick={fetchSuggestions}
-            className="w-full text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium py-2"
-          >
-            {t('ai.getMore')}
-          </button>
+          {(!maxItems || suggestions.length > maxItems) && (
+            <button
+              onClick={fetchSuggestions}
+              className="w-full text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium py-2"
+            >
+              {t('ai.getMore')}
+            </button>
+          )}
         </div>
       )}
 

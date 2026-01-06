@@ -137,6 +137,8 @@
     "quickTasksDesc": "المهام التي تستغرق 15 دقيقة أو أقل",
     "avoiding": "تجنب",
     "sortBy": "ترتيب حسب",
+    "sort": "ترتيب",
+    "filters": "المرشحات",
     "sortByDueDate": "تاريخ الاستحقاق",
     "sortByAssignee": "المسؤول",
     "filterByPerson": "تصفية حسب الشخص",

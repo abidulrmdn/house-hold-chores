@@ -126,7 +126,7 @@ export default function SwipeableTaskCard({
   }
 
   return (
-    <div className="relative mb-3 overflow-visible rounded-xl z-0">
+    <div className="relative mb-4 sm:mb-3 overflow-visible rounded-xl z-0">
       {/* Background actions */}
       <div className="absolute inset-0 flex">
         {/* Right swipe - Complete action */}
@@ -169,95 +169,41 @@ export default function SwipeableTaskCard({
         dragMomentum={false}
         onDragEnd={handleDragEnd}
         whileDrag={{ cursor: 'grabbing' }}
-        className={`relative ${getStatusColor()} border-2 rounded-xl p-4 ${isSelectionMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+        className={`relative ${getStatusColor()} border-2 rounded-xl p-5 sm:p-4 ${isSelectionMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
         data-tutorial="task-card"
       >
-        <div className="flex items-start justify-between">
-          {!task.isCompleted && (
-            <button
-              onClick={async (e) => {
-                e.stopPropagation()
-                if (!user) return
-                setIsCompleting(true)
-                try {
-                  await completeTask(task.id, user.uid)
-                } catch (error) {
-                  console.error('Error completing task:', error)
-                } finally {
-                  setIsCompleting(false)
-                }
-              }}
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-green-500 rounded-full p-2 hover:bg-green-600 transition-colors cursor-pointer z-10 pointer-events-auto"
-              title="Mark as complete"
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <Check className="w-5 h-5 text-white" />
-            </button>
-          )}
-          <div className={`flex-1 ${task.isCompleted ? '' : 'pl-12'}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: categoryColor }}
-              />
-              <h3 className={`font-semibold ${task.isCompleted ? 'text-gray-500 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
-                {routineName}
-              </h3>
-            </div>
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-start justify-between gap-3 sm:gap-2 min-w-0">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2.5 sm:gap-2 mb-2 sm:mb-1 min-w-0">
+                <div 
+                  className="w-3.5 h-3.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: categoryColor }}
+                />
+                <h3 className={`font-semibold text-base sm:text-base leading-tight truncate flex-1 min-w-0 ${task.isCompleted ? 'text-gray-500 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
+                  {routineName}
+                </h3>
+              </div>
             
-            <div className={`flex items-center gap-2 text-sm mb-2 ${task.isCompleted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'}`}>
-              <span>{format(new Date(task.dueDate), 'MMM d, yyyy')}</span>
-              <span>•</span>
-              <div className="flex items-center gap-1.5">
+            <div className={`flex items-center gap-2.5 sm:gap-2 text-sm sm:text-sm mb-3 sm:mb-2 ${task.isCompleted ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'}`}>
+              <span className="whitespace-nowrap">{format(new Date(task.dueDate), 'MMM d, yyyy')}</span>
+              <span className="hidden sm:inline">•</span>
+              <div className="flex items-center gap-2 sm:gap-1.5">
                 {assignedUserPhotoURL && (
                   <img 
                     src={assignedUserPhotoURL} 
                     alt={assignedUserName || 'Assigned user'}
-                    className="w-5 h-5 rounded-full"
+                    className="w-6 h-6 sm:w-5 sm:h-5 rounded-full flex-shrink-0"
                   />
                 )}
-                <span className="font-medium">{assignedUserName || 'Unassigned'}</span>
+                <span className="font-medium whitespace-nowrap">{assignedUserName || 'Unassigned'}</span>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                task.isCompleted 
-                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400' 
-                  : task.missedCount > 0
-                  ? 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-300'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-              }`}>
-                {getStatusText()}
-              </span>
-              {task.missedCount > 0 && !task.isCompleted && (
-                <AlertCircle className="w-4 h-4 text-red-600" />
-              )}
             </div>
-            
-            {/* Notes */}
-            {task.notes && (
-              <div className="flex items-start gap-2 mb-2 text-sm text-gray-600 dark:text-gray-400">
-                <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <p className="line-clamp-2">{task.notes}</p>
-              </div>
-            )}
-            
-            {/* Photos */}
-            {task.photos && task.photos.length > 0 && (
-              <div className="flex items-center gap-2 mb-2">
-                <ImageIcon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                <span className="text-xs text-gray-600 dark:text-gray-400">
-                  {task.photos.length} photo{task.photos.length > 1 ? 's' : ''}
-                </span>
-              </div>
-            )}
-          </div>
 
-          <div className="flex items-center gap-2 ml-4">
-            {!isSelectionMode && (
-              <div className="relative" ref={menuRef}>
+            <div className="flex items-center gap-2.5 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
+              {!isSelectionMode && (
+                <div className="relative" ref={menuRef}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -268,12 +214,12 @@ export default function SwipeableTaskCard({
                     e.stopPropagation()
                     setIsQuickMenuOpen(true)
                   }}
-                  className="p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer pointer-events-auto relative z-50"
+                  className="p-2.5 sm:p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer pointer-events-auto relative z-50"
                   title="Quick actions"
                   onPointerDown={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
-                  <MoreVertical className="w-4 h-4" />
+                  <MoreVertical className="w-5 h-5 sm:w-4 sm:h-4" />
                 </button>
                 {isQuickMenuOpen && menuRef.current && createPortal(
                   <>
@@ -400,12 +346,12 @@ export default function SwipeableTaskCard({
                   e.stopPropagation()
                   setIsEditModalOpen(true)
                 }}
-                className="p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer pointer-events-auto"
+                className="p-2.5 sm:p-2 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer pointer-events-auto"
                 title="Edit task"
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <Edit2 className="w-4 h-4" />
+                <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
               </button>
             )}
             {task.isCompleted && !isSelectionMode && (
@@ -421,15 +367,103 @@ export default function SwipeableTaskCard({
                     setIsCompleting(false)
                   }
                 }}
-                className="bg-gray-400 rounded-full p-2 hover:bg-orange-500 transition-colors cursor-pointer pointer-events-auto"
+                className="bg-gray-400 rounded-full p-2.5 sm:p-2 hover:bg-orange-500 transition-colors cursor-pointer pointer-events-auto"
                 title="Mark as incomplete"
                 onPointerDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <X className="w-5 h-5 text-white" />
+                <X className="w-5 h-5 sm:w-5 sm:h-5 text-white" />
               </button>
             )}
           </div>
+          </div>
+
+          {/* Status badge row - spans both columns to align with edit buttons */}
+          <div className="flex items-start justify-between gap-3 sm:gap-2 min-w-0 mb-3 sm:mb-2">
+              <div className="flex items-center gap-2.5 sm:gap-2">
+                <span className={`text-xs sm:text-xs font-medium px-2.5 sm:px-2 py-1.5 sm:py-1 rounded-full ${
+                  task.isCompleted 
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400' 
+                    : task.missedCount > 0
+                    ? 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-300'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                }`}>
+                  {getStatusText()}
+                </span>
+                {task.missedCount > 0 && !task.isCompleted && (
+                  <AlertCircle className="w-5 h-5 sm:w-4 sm:h-4 text-red-600 flex-shrink-0" />
+                )}
+              </div>
+              {!task.isCompleted && !isSelectionMode && (
+                <div className="flex items-center gap-2.5 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (!user) return
+                      setIsCompleting(true)
+                      try {
+                        await completeTask(task.id, user.uid)
+                      } catch (error) {
+                        console.error('Error completing task:', error)
+                      } finally {
+                        setIsCompleting(false)
+                      }
+                    }}
+                    className="bg-green-500 rounded-full p-2.5 sm:hidden hover:bg-green-600 transition-colors cursor-pointer pointer-events-auto flex items-center flex-shrink-0"
+                    title="Mark as complete"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <Check className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {/* Notes */}
+            {task.notes && (
+              <div className="flex items-start gap-2.5 sm:gap-2 mb-3 sm:mb-2 text-sm sm:text-sm text-gray-600 dark:text-gray-400">
+                <FileText className="w-5 h-5 sm:w-4 sm:h-4 mt-0.5 flex-shrink-0" />
+                <p className="line-clamp-2">{task.notes}</p>
+              </div>
+            )}
+            
+            {/* Photos */}
+            {task.photos && task.photos.length > 0 && (
+              <div className="flex items-center gap-2.5 sm:gap-2 mb-2">
+                <ImageIcon className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                <span className="text-xs sm:text-xs text-gray-600 dark:text-gray-400">
+                  {task.photos.length} photo{task.photos.length > 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+          
+          {/* Green check button at bottom (desktop only) */}
+          {!task.isCompleted && !isSelectionMode && (
+            <div className="hidden sm:flex sm:justify-start mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  if (!user) return
+                  setIsCompleting(true)
+                  try {
+                    await completeTask(task.id, user.uid)
+                  } catch (error) {
+                    console.error('Error completing task:', error)
+                  } finally {
+                    setIsCompleting(false)
+                  }
+                }}
+                className="bg-green-500 rounded-full p-2 hover:bg-green-600 transition-colors cursor-pointer pointer-events-auto flex items-center gap-2"
+                title="Mark as complete"
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <Check className="w-4 h-4 text-white" />
+                <span className="text-sm font-medium text-white">Complete</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {isCompleting && (

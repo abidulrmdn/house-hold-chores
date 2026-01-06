@@ -290,7 +290,7 @@ export default function TaskList({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 sm:space-y-3">
       {/* Bulk Operations Bar */}
       {isSelectionMode && (
         <div className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 rounded-lg shadow-lg mb-4">

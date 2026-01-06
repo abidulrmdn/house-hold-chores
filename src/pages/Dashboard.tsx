@@ -23,6 +23,7 @@ import CalendarView from '@/components/CalendarView'
 import AISuggestions from '@/components/AISuggestions'
 import SmartInsights from '@/components/SmartInsights'
 import InviteBanner from '@/components/InviteBanner'
+import MobileToolbar from '@/components/MobileToolbar'
 import { signOut } from 'firebase/auth'
 import { auth } from '@/firebase/config'
 import { requestNotificationPermission, sendTestNotification, scheduleDelayedNotification } from '@/firebase/config'
@@ -65,6 +66,7 @@ export default function Dashboard() {
   const [notificationStatus, setNotificationStatus] = useState<'enabled' | 'disabled' | 'unknown'>('unknown')
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
   const [isLanguageSelectorOpen, setIsLanguageSelectorOpen] = useState(false)
+  const [showMobileAI, setShowMobileAI] = useState(false)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const [settingsMenuPosition, setSettingsMenuPosition] = useState<{ top: number; right?: number; left?: number } | null>(null)
   const { theme, setTheme, effectiveTheme } = useThemeStore()
@@ -906,8 +908,31 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Search and Filters Bar */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-16 z-40" data-tutorial="search">
+      {/* Mobile Toolbar - Only visible on mobile */}
+      <MobileToolbar
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        quickFilter={quickFilter}
+        setQuickFilter={setQuickFilter}
+        onAIClick={() => {
+          const wasVisible = showMobileAI
+          setShowMobileAI(!showMobileAI)
+          // Only scroll if we're showing the AI section (not hiding it)
+          if (!wasVisible) {
+            // Scroll all the way to the top
+            window.scrollTo({
+              top: 0,
+              behavior: 'smooth'
+            })
+          }
+        }}
+        isAIVisible={showMobileAI}
+      />
+
+      {/* Search and Filters Bar - Desktop only */}
+      <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-16 z-40" data-tutorial="search">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex flex-col sm:flex-row gap-3">
             {/* Search Bar */}
@@ -1034,7 +1059,7 @@ export default function Dashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-[140px] sm:top-[120px] z-40">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-[112px] sm:top-[120px] z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-1 overflow-x-auto" data-tutorial="tabs">
             {tabs.map(tab => {
@@ -1069,14 +1094,16 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Smart Insights */}
-        {userData?.householdId && tasks.length > 0 && (
-          <SmartInsights
-            tasks={tasks}
-            routines={routines}
-            categories={categories}
-          />
-        )}
+        {/* Smart Insights - Hidden on mobile (accessible via toolbar) */}
+        <div className="hidden sm:block ai-section">
+          {userData?.householdId && tasks.length > 0 && (
+            <SmartInsights
+              tasks={tasks}
+              routines={routines}
+              categories={categories}
+            />
+          )}
+        </div>
 
         {/* Invite Banner - Show only if household has only 1 member */}
         {userData?.householdId && householdUsers.length === 1 && (
@@ -1086,20 +1113,49 @@ export default function Dashboard() {
           />
         )}
 
-        {/* AI Suggestions */}
-        {userData?.householdId && activeTab !== 'stats' && activeTab !== 'calendar' && (
-          <AISuggestions
-            routines={routines}
-            categories={categories}
-            tasks={tasks}
-            householdId={userData.householdId}
-            onSuggestionSelect={(suggestion) => {
-              // Open create routine modal with suggestion pre-filled
-              setIsModalOpen(true)
-              // Store suggestion to pre-fill form
-              setPendingSuggestion(suggestion)
-            }}
-          />
+        {/* AI Suggestions - Hidden on mobile (accessible via toolbar) */}
+        <div className="hidden sm:block ai-section">
+          {userData?.householdId && activeTab !== 'stats' && activeTab !== 'calendar' && (
+            <AISuggestions
+              routines={routines}
+              categories={categories}
+              tasks={tasks}
+              householdId={userData.householdId}
+              onSuggestionSelect={(suggestion) => {
+                // Open create routine modal with suggestion pre-filled
+                setIsModalOpen(true)
+                // Store suggestion to pre-fill form
+                setPendingSuggestion(suggestion)
+              }}
+              maxItems={3}
+            />
+          )}
+        </div>
+
+        {/* Mobile AI Section - Show when AI button is clicked */}
+        {showMobileAI && (
+          <div className="sm:hidden mobile-ai-section mb-6">
+            {userData?.householdId && tasks.length > 0 && (
+              <SmartInsights
+                tasks={tasks}
+                routines={routines}
+                categories={categories}
+              />
+            )}
+            {userData?.householdId && activeTab !== 'stats' && activeTab !== 'calendar' && (
+              <AISuggestions
+                routines={routines}
+                categories={categories}
+                tasks={tasks}
+                householdId={userData.householdId}
+                onSuggestionSelect={(suggestion) => {
+                  setIsModalOpen(true)
+                  setPendingSuggestion(suggestion)
+                }}
+                maxItems={3}
+              />
+            )}
+          </div>
         )}
 
         {/* Clear All Today Button */}

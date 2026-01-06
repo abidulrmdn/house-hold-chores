@@ -137,6 +137,8 @@
     "quickTasksDesc": "Taken die 15 minuten of minder duren",
     "avoiding": "Vermijden",
     "sortBy": "Sorteren Op",
+    "sort": "Sorteren",
+    "filters": "Filters",
     "sortByDueDate": "Vervaldatum",
     "sortByAssignee": "Toegewezen Aan",
     "filterByPerson": "Filteren op Persoon",

@@ -137,6 +137,8 @@
     "quickTasksDesc": "Tasks that take 15 minutes or less",
     "avoiding": "Avoiding",
     "sortBy": "Sort By",
+    "sort": "Sort",
+    "filters": "Filters",
     "sortByDueDate": "Due Date",
     "sortByAssignee": "Assignee",
     "filterByPerson": "Filter by Person",
