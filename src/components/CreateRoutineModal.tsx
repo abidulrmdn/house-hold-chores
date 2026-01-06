@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Sparkles, Loader2 } from 'lucide-react'
 import { Frequency } from '@/types'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
+import { parseNaturalLanguageTask } from '@/services/aiService'
 import toast from 'react-hot-toast'
 
 interface CreateRoutineModalProps {
@@ -45,6 +46,9 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId, initi
   const [householdMembers, setHouseholdMembers] = useState<any[]>([])
   const [notes, setNotes] = useState('')
   const [estimatedDuration, setEstimatedDuration] = useState('')
+  const [naturalLanguageInput, setNaturalLanguageInput] = useState('')
+  const [isParsingNL, setIsParsingNL] = useState(false)
+  const [showNLInput, setShowNLInput] = useState(false)
   const { createRoutine, createCategory, categories, fetchCategories } = useRoutineStore()
   const { userData } = useAuthStore()
   const { household } = useHouseholdStore()
@@ -74,6 +78,69 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId, initi
       }
     }
   }, [initialSuggestion, isOpen, categories])
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setName('')
+      setFrequency('weekly')
+      setCategoryId('')
+      setCategoryName('')
+      setAssignedTo([])
+      setStartDate('')
+      setReminderEnabled(false)
+      setReminderTime('60')
+      setNotes('')
+      setEstimatedDuration('')
+      setNaturalLanguageInput('')
+      setShowNLInput(false)
+    }
+  }, [isOpen])
+
+  const handleNaturalLanguageParse = async () => {
+    if (!naturalLanguageInput.trim()) {
+      toast.error('Please enter a task description')
+      return
+    }
+
+    setIsParsingNL(true)
+    try {
+      const parsed = await parseNaturalLanguageTask(naturalLanguageInput, categories)
+      
+      // Fill form with parsed data
+      setName(parsed.name)
+      setFrequency(parsed.frequency)
+      
+      // Try to find existing category or set as new
+      const existingCategory = categories.find(c => 
+        c.name.toLowerCase() === parsed.category.toLowerCase()
+      )
+      if (existingCategory) {
+        setCategoryId(existingCategory.id)
+        setCategoryName('')
+      } else {
+        setCategoryName(parsed.category)
+        setCategoryId('')
+      }
+      
+      toast.success('Task parsed successfully! Review and adjust if needed.')
+      setNaturalLanguageInput('')
+      setShowNLInput(false)
+    } catch (error: any) {
+      console.error('Error parsing natural language:', error)
+      if (error.code === 'functions/not-found') {
+        toast.error('AI features not deployed. Please deploy Firebase Functions first.')
+      } else if (error.code === 'functions/failed-precondition') {
+        toast.error('Gemini API not configured. Please set up your API key.')
+      } else if (error.code === 'functions/resource-exhausted') {
+        toast.error('Rate limit exceeded. Please try again later.')
+      } else {
+        toast.error('Failed to parse task. Please fill the form manually.')
+      }
+    } finally {
+      setIsParsingNL(false)
+    }
+  }
 
   const fetchHouseholdMembers = async () => {
     try {
@@ -258,7 +325,77 @@ export default function CreateRoutineModal({ isOpen, onClose, householdId, initi
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+          {/* Natural Language Input */}
+          {!showNLInput ? (
+            <div className="flex justify-end -mt-1 -mr-1 sm:mt-0 sm:mr-0">
+              <button
+                type="button"
+                onClick={() => setShowNLInput(true)}
+                className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium text-xs sm:text-sm px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Create with AI</span>
+                <span className="sm:hidden">AI</span>
+              </button>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg border border-purple-200 dark:border-purple-800 p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Natural Language Input
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNLInput(false)
+                    setNaturalLanguageInput('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <input
+                type="text"
+                value={naturalLanguageInput}
+                onChange={(e) => setNaturalLanguageInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleNaturalLanguageParse()}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-2"
+                placeholder='e.g., "Clean bathroom every week" or "Vacuum living room twice a week"'
+                disabled={isParsingNL}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleNaturalLanguageParse}
+                  disabled={isParsingNL || !naturalLanguageInput.trim()}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                >
+                  {isParsingNL ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="hidden sm:inline">Parsing...</span>
+                      <span className="sm:hidden">...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Parse</span>
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+                  Examples: "Wash dishes daily", "Change air filter every 3 months"
+                </p>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Routine Name *

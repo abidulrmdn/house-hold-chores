@@ -477,10 +477,20 @@ export default function Dashboard() {
           break
         case '?':
           e.preventDefault()
-          toast('Keyboard Shortcuts:\nN - New routine\nS - Search\nT - Today\nW - Week\nA - All\nM - My Tasks\nC - Calendar\nEsc - Close modals\nCtrl+K - Quick search', {
-            duration: 5000,
+          toast('Keyboard Shortcuts:\nN - New routine\nS - Search\nT - Today\nW - Week\nA - All\nM - My Tasks\nC - Calendar\nP - Statistics\nEsc - Close modals\nCtrl+K - Quick search\n/ - Focus search', {
+            duration: 6000,
             icon: '⌨️'
           })
+          break
+        case '/':
+          e.preventDefault()
+          // Focus search
+          const searchInputSlash = document.querySelector('input[type="search"], input[placeholder*="Search"]') as HTMLInputElement
+          searchInputSlash?.focus()
+          break
+        case 'p':
+          e.preventDefault()
+          setActiveTab('stats')
           break
       }
     }
