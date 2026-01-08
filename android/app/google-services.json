@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "590220309328",
+    "project_id": "household-chores-d8eae",
+    "storage_bucket": "household-chores-d8eae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:590220309328:android:6d418d5e0eaf9a03e6f255",
+        "android_client_info": {
+          "package_name": "com.household.routinemanager"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "590220309328-eqieetbj9j163leh2gh2fgqaslvordjr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDB1va9upYeB7Ohbb1bSlXrrPzpuPWJkVw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "590220309328-eqieetbj9j163leh2gh2fgqaslvordjr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

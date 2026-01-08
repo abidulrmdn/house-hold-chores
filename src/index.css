@@ -9,6 +9,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 * {
@@ -17,6 +18,11 @@ body {
 
 #root {
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
 }
 
 /* Safe area insets for mobile devices (notch, status bar, etc.) */
@@ -36,7 +42,12 @@ header {
 
 /* Ensure bottom toolbar respects safe area */
 .mobile-toolbar-bottom {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  /* Padding is handled inline in the component */
+}
+
+.mobile-toolbar-bottom > div:last-child {
+  /* Ensure the toolbar background extends to the bottom */
+  margin-bottom: 0;
 }
 
 @keyframes slide-up {
@@ -136,5 +147,33 @@ header {
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/* Android Auth page specific fixes */
+.android-auth-page {
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* Prevent body padding on Android auth page */
+body.android-auth-active {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  overflow: hidden;
+}
+
+/* Ensure root doesn't add extra spacing on Android auth */
+#root.android-auth-active {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 

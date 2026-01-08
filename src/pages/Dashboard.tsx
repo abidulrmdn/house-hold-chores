@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag, Search, Moon, Sun, ArrowUpDown, X, CheckCircle2, BarChart3, Info, Sparkles, Globe, FileText } from 'lucide-react'
+import { Plus, Calendar, CheckSquare, User, Bell, Home, Users, Settings, LogOut, Tag, Search, Moon, Sun, ArrowUpDown, X, CheckCircle2, BarChart3, Info, Sparkles, Globe, FileText, RotateCw } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useRoutineStore } from '@/store/useRoutineStore'
 import { useHouseholdStore } from '@/store/useHouseholdStore'
@@ -17,6 +17,7 @@ import UserProfileModal from '@/components/UserProfileModal'
 import ImportModal from '@/components/ImportModal'
 import DayTasksModal from '@/components/DayTasksModal'
 import InstallPrompt from '@/components/InstallPrompt'
+import NotificationPrompt from '@/components/NotificationPrompt'
 import Tutorial from '@/components/Tutorial'
 import OnboardingWizard from '@/components/OnboardingWizard'
 import StatisticsDashboard from '@/components/StatisticsDashboard'
@@ -31,11 +32,13 @@ import { requestNotificationPermission, sendTestNotification, scheduleDelayedNot
 import { sendDailyNotification, scheduleDailyNotificationCheck } from '@/services/notificationService'
 import toast from 'react-hot-toast'
 import { isToday, startOfWeek, endOfWeek } from 'date-fns'
+import { App as CapacitorApp } from '@capacitor/app'
+import { isNativeApp } from '@/utils/device'
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'today' | 'week' | 'all' | 'my-tasks' | 'stats' | 'calendar'>('today')
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const { user, userData, setUser, loadUserData } = useAuthStore()
+  const { user, userData, setUser, loadUserData, loading: authLoading } = useAuthStore()
   const { 
     tasks, 
     routines, 
@@ -43,7 +46,6 @@ export default function Dashboard() {
     fetchRoutines, 
     fetchCategories, 
     subscribeToTasks,
-    checkAndUpdateMissedTasks,
     completeTask
   } = useRoutineStore()
   const { household, createHousehold, loadHousehold, leaveHousehold } = useHouseholdStore()
@@ -70,8 +72,15 @@ export default function Dashboard() {
   const [showMobileAI, setShowMobileAI] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [showTabs, setShowTabs] = useState(false) // Toggle for tabs visibility on mobile - off by default
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [pullToRefreshY, setPullToRefreshY] = useState(0)
+  const [isPulling, setIsPulling] = useState(false)
+  const pullStartY = useRef<number>(0)
+  const lastRefreshTime = useRef<number>(0)
+  const isManualRefresh = useRef<boolean>(false)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
+  const mainContentRef = useRef<HTMLDivElement>(null)
   const [settingsMenuPosition, setSettingsMenuPosition] = useState<{ top: number; right?: number; left?: number } | null>(null)
   const { theme, setTheme, effectiveTheme } = useThemeStore()
   const { direction } = useLanguageStore()
@@ -150,6 +159,45 @@ export default function Dashboard() {
     }
   }
 
+  // Refresh function to reload all data
+  const refreshData = useCallback(async (showToast: boolean = false) => {
+    if (!userData?.householdId) return
+    
+    // Prevent multiple simultaneous refreshes (debounce)
+    const now = Date.now()
+    if (now - lastRefreshTime.current < 1000) {
+      console.log('Refresh skipped - too soon after last refresh')
+      return
+    }
+    lastRefreshTime.current = now
+    
+    setIsRefreshing(true)
+    try {
+      // Fetch routines and categories
+      await Promise.all([
+        fetchRoutines(userData.householdId),
+        fetchCategories(userData.householdId),
+        loadUserData()
+      ])
+      // Fetch household users separately (it's defined in component)
+      await fetchHouseholdUsers(userData.householdId)
+      
+      // Only show toast for manual refreshes (pull-to-refresh)
+      if (showToast || isManualRefresh.current) {
+        toast.success(t('common.refreshed') || 'Refreshed!', { duration: 2000 })
+        isManualRefresh.current = false
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+      if (showToast || isManualRefresh.current) {
+        toast.error('Failed to refresh data')
+        isManualRefresh.current = false
+      }
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [userData?.householdId, fetchRoutines, fetchCategories, loadUserData, t])
+
   useEffect(() => {
     if (!userData?.householdId) {
       return
@@ -160,16 +208,47 @@ export default function Dashboard() {
     // Always fetch all household tasks, filtering will be done in TaskList
     const unsubscribe = subscribeToTasks(userData.householdId)
 
-    // Check for missed tasks periodically
-    const interval = setInterval(() => {
-      checkAndUpdateMissedTasks()
-    }, 60000) // Check every minute
+    // Note: Missed tasks checking is now handled by Cloud Function (checkMissedTasks)
+    // which runs daily at 2 AM UTC. No need to check locally anymore.
 
     return () => {
       unsubscribe()
-      clearInterval(interval)
     }
-  }, [userData?.householdId, activeTab, user?.uid, fetchRoutines, fetchCategories, subscribeToTasks, checkAndUpdateMissedTasks])
+  }, [userData?.householdId, activeTab, user?.uid, fetchRoutines, fetchCategories, subscribeToTasks])
+
+  // Listen for app state changes to refresh when app comes to foreground
+  useEffect(() => {
+    if (!isNativeApp()) return
+
+    let appStateListener: any = null
+    let refreshTimeout: NodeJS.Timeout | null = null
+
+    CapacitorApp.addListener('appStateChange', async (state: any) => {
+      if (state.isActive && userData?.householdId) {
+        console.log('App became active, refreshing data silently...')
+        // Clear any pending refresh
+        if (refreshTimeout) {
+          clearTimeout(refreshTimeout)
+        }
+        // Small delay to ensure app is fully active, refresh silently (no toast)
+        refreshTimeout = setTimeout(() => {
+          isManualRefresh.current = false
+          refreshData(false)
+        }, 500)
+      }
+    }).then((listener) => {
+      appStateListener = listener
+    })
+
+    return () => {
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout)
+      }
+      if (appStateListener) {
+        appStateListener.remove()
+      }
+    }
+  }, [userData?.householdId, refreshData])
 
   // Clear user filter when switching tabs (except my-tasks)
   useEffect(() => {
@@ -181,11 +260,70 @@ export default function Dashboard() {
     }
   }, [activeTab, user?.uid])
 
+  // Pull-to-refresh handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY === 0 && !isRefreshing) {
+      pullStartY.current = e.touches[0].clientY
+      setIsPulling(true)
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isPulling || isRefreshing) return
+    
+    const currentY = e.touches[0].clientY
+    const deltaY = currentY - pullStartY.current
+    
+    if (deltaY > 0 && window.scrollY === 0) {
+      // Only allow pull down when at top of page
+      const pullDistance = Math.min(deltaY * 0.5, 80) // Max 80px pull distance
+      setPullToRefreshY(pullDistance)
+    } else {
+      setIsPulling(false)
+      setPullToRefreshY(0)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (pullToRefreshY > 50 && !isRefreshing) {
+      // Trigger refresh if pulled more than 50px - mark as manual refresh
+      isManualRefresh.current = true
+      refreshData(true)
+    }
+    setIsPulling(false)
+    setPullToRefreshY(0)
+  }
+
   useEffect(() => {
     // Check notification status on mount and save token to Firestore
     const checkNotificationStatus = async () => {
+      if (!user?.uid) return
+      
       try {
-        if (Notification.permission === 'granted') {
+        // Check Firestore first to see if user already has notifications enabled
+        try {
+          const { doc: docFn, getDoc: getDocFn } = await import('firebase/firestore')
+          const { db } = await import('@/firebase/config')
+          if (db) {
+            const userDoc = await getDocFn(docFn(db, 'users', user.uid))
+            if (userDoc.exists()) {
+              const userData = userDoc.data()
+              if (userData.notificationEnabled && userData.fcmToken) {
+                setNotificationStatus('enabled')
+                return // Already enabled, no need to check again
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error checking user notification status:', error)
+        }
+
+        // If not enabled in Firestore, check browser permission
+        // Check if we're in a native app (Notification API not available)
+        const isNativeApp = typeof window !== 'undefined' && !!(window as any).Capacitor
+        
+        if (isNativeApp) {
+          // For native apps, try to get token directly
           const token = await requestNotificationPermission()
           if (token && user?.uid) {
             setNotificationStatus('enabled')
@@ -198,6 +336,28 @@ export default function Dashboard() {
                   fcmToken: token,
                   notificationEnabled: true
                 })
+                console.log('FCM token saved to Firestore:', token.substring(0, 20) + '...')
+              }
+            } catch (error) {
+              console.error('Error saving FCM token to Firestore:', error)
+            }
+          } else {
+            setNotificationStatus('disabled')
+          }
+        } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const token = await requestNotificationPermission()
+          if (token && user?.uid) {
+            setNotificationStatus('enabled')
+            // Save token to Firestore for Cloud Functions to use
+            try {
+              const { doc: docFn, updateDoc: updateDocFn } = await import('firebase/firestore')
+              const { db } = await import('@/firebase/config')
+              if (db) {
+                await updateDocFn(docFn(db, 'users', user.uid), {
+                  fcmToken: token,
+                  notificationEnabled: true
+                })
+                console.log('FCM token saved to Firestore:', token.substring(0, 20) + '...')
               }
             } catch (error) {
               console.error('Error saving FCM token to Firestore:', error)
@@ -208,12 +368,16 @@ export default function Dashboard() {
         } else {
           setNotificationStatus('disabled')
         }
-      } catch {
+      } catch (error) {
+        console.error('Error checking notification status:', error)
         setNotificationStatus('disabled')
       }
     }
-    checkNotificationStatus()
-  }, [])
+    
+    if (user?.uid) {
+      checkNotificationStatus()
+    }
+  }, [user?.uid])
 
   // Calculate settings menu position when it opens
   useEffect(() => {
@@ -273,13 +437,16 @@ export default function Dashboard() {
     const handleResize = () => {
       if (tabsRef.current) {
         if (window.matchMedia('(min-width: 640px)').matches) {
-          // Desktop: set sticky positioning below search bar (header 4rem + search bar ~6rem with reduced padding)
+          // Desktop: set sticky positioning below search bar
+          // Header: 4rem (64px) + Search bar: ~6rem (96px) = ~10rem total
           tabsRef.current.style.top = 'calc(4rem + 6rem)'
+          tabsRef.current.style.position = 'sticky'
           tabsRef.current.style.left = 'auto'
           tabsRef.current.style.right = 'auto'
         } else {
           // Mobile: keep fixed positioning
           tabsRef.current.style.top = showTabs ? 'calc(4rem + env(safe-area-inset-top, 0px))' : '-100%'
+          tabsRef.current.style.position = 'fixed'
           tabsRef.current.style.left = '0'
           tabsRef.current.style.right = '0'
         }
@@ -383,11 +550,15 @@ export default function Dashboard() {
     const weekStart = startOfWeek(now, { weekStartsOn: 1 })
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
     
+    // Convert to timestamps for comparison (dueDate is stored as timestamp)
+    const weekStartTimestamp = weekStart.getTime()
+    const weekEndTimestamp = weekEnd.getTime()
+    
     return {
       today: tasks.filter(t => isToday(new Date(t.dueDate)) && !t.isCompleted).length,
       week: tasks.filter(t => {
-        const taskDate = new Date(t.dueDate)
-        return taskDate >= weekStart && taskDate <= weekEnd
+        // dueDate is already a timestamp (number), compare directly
+        return t.dueDate >= weekStartTimestamp && t.dueDate <= weekEndTimestamp
       }).length,
       'my-tasks': tasks.filter(t => t.assignedTo === user?.uid).length,
       all: tasks.length
@@ -540,7 +711,9 @@ export default function Dashboard() {
 
   // Show household setup screen if user doesn't have a household
   // IMPORTANT: This must be AFTER all hooks
-  if (user && !userData?.householdId) {
+  // Only show if userData has been loaded (not loading) and householdId is missing
+  // This prevents the flash when userData is still loading
+  if (user && !authLoading && userData !== undefined && !userData?.householdId) {
     return (
       <>
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
@@ -614,9 +787,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors overflow-x-hidden">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 fixed top-0 left-0 right-0 z-50 transition-colors overflow-hidden safe-area-top">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 fixed top-0 left-0 right-0 z-50 transition-colors overflow-hidden safe-area-top" style={{ width: '100%', maxWidth: '100vw' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between min-h-16 py-2 sm:py-0 sm:h-16 gap-2 sm:gap-4 overflow-hidden">
             <div className="flex-1 min-w-0">
@@ -674,34 +847,48 @@ export default function Dashboard() {
                         toast.success('Push notifications enabled! You\'ll receive daily notifications at 8 AM.')
                         console.log('FCM Token:', token) // Log token for debugging
                       } else {
-                        // Check if VAPID key is configured
-                        if (!vapidKey || vapidKey === 'demo-vapid-key' || vapidKey.trim() === '') {
+                        // Check if we're in a native app
+                        const isNativeApp = typeof window !== 'undefined' && !!(window as any).Capacitor
+                        
+                        if (isNativeApp) {
+                          // For native apps, token might have failed for other reasons
                           setNotificationStatus('disabled')
-                          toast('VAPID key not configured. Please add VITE_FIREBASE_VAPID_KEY to your .env file and restart the dev server.', { icon: 'ℹ️' })
+                          toast.error('Failed to enable notifications. Please check app permissions in device settings.')
                         } else {
-                          // VAPID key is set but token request failed
-                          if (Notification.permission === 'granted') {
+                          // Check if VAPID key is configured
+                          if (!vapidKey || vapidKey === 'demo-vapid-key' || vapidKey.trim() === '') {
                             setNotificationStatus('disabled')
-                            toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
-                          } else if (Notification.permission === 'default') {
-                            const permission = await Notification.requestPermission()
-                            if (permission === 'granted') {
-                              // Retry getting token after permission granted
-                              const retryToken = await requestNotificationPermission()
-                              if (retryToken) {
-                                setNotificationStatus('enabled')
-                                toast.success('Push notifications enabled!')
-                              } else {
+                            toast('VAPID key not configured. Please add VITE_FIREBASE_VAPID_KEY to your .env file and restart the dev server.', { icon: 'ℹ️' })
+                          } else {
+                            // VAPID key is set but token request failed
+                            if (typeof Notification !== 'undefined') {
+                              if (Notification.permission === 'granted') {
                                 setNotificationStatus('disabled')
                                 toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                              } else if (Notification.permission === 'default') {
+                                const permission = await Notification.requestPermission()
+                                if (permission === 'granted') {
+                                  // Retry getting token after permission granted
+                                  const retryToken = await requestNotificationPermission()
+                                  if (retryToken) {
+                                    setNotificationStatus('enabled')
+                                    toast.success('Push notifications enabled!')
+                                  } else {
+                                    setNotificationStatus('disabled')
+                                    toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                                  }
+                                } else {
+                                  setNotificationStatus('disabled')
+                                  toast.error('Notification permission denied')
+                                }
+                              } else {
+                                setNotificationStatus('disabled')
+                                toast.error('Notifications blocked. Please enable in browser settings.')
                               }
                             } else {
                               setNotificationStatus('disabled')
-                              toast.error('Notification permission denied')
+                              toast.error('Notifications not supported in this environment.')
                             }
-                          } else {
-                            setNotificationStatus('disabled')
-                            toast.error('Notifications blocked. Please enable in browser settings.')
                           }
                         }
                       }
@@ -900,36 +1087,58 @@ export default function Dashboard() {
                                 setNotificationStatus('disabled')
                                 toast('VAPID key not configured. Please add VITE_FIREBASE_VAPID_KEY to your .env file and restart the dev server.', { icon: 'ℹ️' })
                               } else {
-                                // VAPID key is set but token request failed
-                                if (Notification.permission === 'granted') {
+                                // Check if we're in a native app
+                                const isNativeApp = typeof window !== 'undefined' && !!(window as any).Capacitor
+                                
+                                if (isNativeApp) {
+                                  // For native apps, token might have failed for other reasons
                                   setNotificationStatus('disabled')
-                                  toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
-                                } else if (Notification.permission === 'default') {
-                                  const permission = await Notification.requestPermission()
-                                  if (permission === 'granted') {
-                                    // Retry getting token after permission granted
-                                    const retryToken = await requestNotificationPermission()
-                                    if (retryToken) {
-                                      setNotificationStatus('enabled')
-                                      toast.success('Push notifications enabled!')
+                                  toast.error('Failed to enable notifications. Please check app permissions in device settings.')
+                                } else if (typeof Notification !== 'undefined') {
+                                  // VAPID key is set but token request failed
+                                  if (Notification.permission === 'granted') {
+                                    setNotificationStatus('disabled')
+                                    toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                                  } else if (Notification.permission === 'default') {
+                                    const permission = await Notification.requestPermission()
+                                    if (permission === 'granted') {
+                                      // Retry getting token after permission granted
+                                      const retryToken = await requestNotificationPermission()
+                                      if (retryToken) {
+                                        setNotificationStatus('enabled')
+                                        toast.success('Push notifications enabled!')
+                                      } else {
+                                        setNotificationStatus('disabled')
+                                        toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                                      }
                                     } else {
                                       setNotificationStatus('disabled')
-                                      toast('Browser notifications enabled, but push notifications failed. Check VAPID key.', { icon: '⚠️' })
+                                      toast.error('Notification permission denied')
                                     }
                                   } else {
                                     setNotificationStatus('disabled')
-                                    toast.error('Notification permission denied')
+                                    toast.error('Notifications blocked. Please enable in browser settings.')
                                   }
                                 } else {
                                   setNotificationStatus('disabled')
-                                  toast.error('Notifications blocked. Please enable in browser settings.')
+                                  toast.error('Notifications not supported in this environment.')
                                 }
                               }
                             }
                           } catch (error: any) {
                             console.error('Notification error:', error)
                             setNotificationStatus('disabled')
-                            toast.error(`Failed to enable notifications: ${error.message}`)
+                            // Check if error is about Notification not being defined
+                            if (error?.message?.includes('not defined') || error?.message?.includes('Notification')) {
+                              const isNativeApp = typeof window !== 'undefined' && !!(window as any).Capacitor
+                              if (isNativeApp) {
+                                toast.error('Failed to enable notifications. Please check app permissions in device settings.')
+                              } else {
+                                toast.error('Notifications not supported in this browser.')
+                              }
+                            } else {
+                              toast.error(`Failed to enable notifications: ${error.message || 'Unknown error'}`)
+                            }
                           }
                         }}
                         className="w-full px-4 py-2 text-start text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:hidden relative"
@@ -1251,6 +1460,7 @@ export default function Dashboard() {
         className={`bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-40 transition-all duration-300 ${
           showTabs ? 'translate-y-0' : '-translate-y-full'
         } fixed left-0 right-0 sm:translate-y-0 sm:relative sm:sticky sm:left-auto sm:right-auto`}
+        style={{ width: '100%', maxWidth: '100vw' }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex gap-1 overflow-x-auto" data-tutorial="tabs">
@@ -1285,7 +1495,51 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content - Add top padding to account for fixed header + search bar + tabs on desktop */}
-      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 sm:pb-8 transition-all duration-300 ${showTabs ? 'pt-32' : 'pt-20'} sm:pt-[6.5rem]`}>
+      <main 
+        ref={mainContentRef}
+        className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 sm:pb-8 transition-all duration-300 ${showTabs ? 'pt-32' : 'pt-20'} sm:pt-[6.5rem] overflow-x-hidden relative`}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          paddingBottom: 'calc(6rem + max(0.5rem, env(safe-area-inset-bottom, 0px)))', // Account for toolbar height + safe area
+          transform: pullToRefreshY > 0 ? `translateY(${pullToRefreshY}px)` : 'none',
+          transition: isPulling ? 'none' : 'transform 0.3s ease-out'
+        }}
+      >
+        {/* Pull-to-refresh indicator */}
+        {(pullToRefreshY > 5 || isRefreshing) && (
+          <div 
+            className="absolute top-0 left-0 right-0 flex items-center justify-center py-3 text-primary-600 dark:text-primary-400 z-50 pointer-events-none"
+            style={{ 
+              transform: `translateY(-${Math.max(pullToRefreshY, 0)}px)`,
+              opacity: isRefreshing ? 1 : Math.max(Math.min(pullToRefreshY / 25, 1), 0.3) // Fade in from 25px, minimum 0.3 opacity
+            }}
+          >
+            {isRefreshing ? (
+              <div className="flex flex-col items-center gap-2">
+                <RotateCw className="w-6 h-6 animate-spin" />
+                <span className="text-xs font-medium">{t('common.refreshing') || 'Refreshing...'}</span>
+              </div>
+            ) : pullToRefreshY > 50 ? (
+              <div className="flex flex-col items-center gap-2">
+                <RotateCw 
+                  className="w-6 h-6 transition-transform duration-200" 
+                  style={{ transform: `rotate(${Math.min(pullToRefreshY * 2, 180)}deg)` }}
+                />
+                <span className="text-xs font-medium">{t('common.releaseToRefresh') || 'Release to refresh'}</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <RotateCw 
+                  className="w-6 h-6 transition-transform duration-200"
+                  style={{ transform: `rotate(${pullToRefreshY * 2}deg)` }}
+                />
+                <span className="text-xs font-medium opacity-0">{t('common.pullToRefresh') || 'Pull to refresh'}</span>
+              </div>
+            )}
+          </div>
+        )}
         {/* Smart Insights - Hidden on mobile (accessible via toolbar) */}
         <div className="hidden sm:block ai-section">
           {userData?.householdId && tasks.length > 0 && (
@@ -1539,6 +1793,7 @@ export default function Dashboard() {
         <button
           onClick={() => setIsModalOpen(true)}
           className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all z-50 flex items-center justify-center group"
+          style={{ position: 'fixed', right: '1rem' }}
           title="Create new routine (N)"
           data-tutorial="create-button"
         >
@@ -1549,6 +1804,9 @@ export default function Dashboard() {
 
       {/* Install Prompt */}
       <InstallPrompt />
+
+      {/* Notification Prompt - Android Mobile Only, One-Time */}
+      <NotificationPrompt />
 
       {/* Tutorial */}
       <Tutorial />

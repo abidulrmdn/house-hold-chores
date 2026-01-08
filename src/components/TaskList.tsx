@@ -55,9 +55,12 @@ export default function TaskList({
       const now = new Date()
       const weekStart = startOfWeek(now, { weekStartsOn: 1 })
       const weekEnd = endOfWeek(now, { weekStartsOn: 1 })
+      // Convert to timestamps for comparison (dueDate is stored as timestamp)
+      const weekStartTimestamp = weekStart.getTime()
+      const weekEndTimestamp = weekEnd.getTime()
       filtered = filtered.filter(task => {
-        const taskDate = new Date(task.dueDate)
-        return taskDate >= weekStart && taskDate <= weekEnd
+        // dueDate is already a timestamp (number), compare directly
+        return task.dueDate >= weekStartTimestamp && task.dueDate <= weekEndTimestamp
       })
     }
 

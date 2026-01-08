@@ -1,0 +1,11 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.household.routinemanager",
+    "sha256_cert_fingerprints": [
+      "5B:A9:19:A8:53:97:3E:00:D5:F5:F2:ED:EB:E8:3C:91:A9:B1:2C:2C:16:DA:00:A1:1D:6B:17:F5:C5:BD:76:C6"
+    ]
+  }
+}]
+

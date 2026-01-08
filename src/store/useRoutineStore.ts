@@ -30,7 +30,6 @@ interface RoutineState {
   updateRoutine: (routineId: string, updates: Partial<Routine>) => Promise<void>
   subscribeToTasks: (householdId: string, userId?: string) => () => void
   generateTaskInstances: (routineId: string, routine: Omit<Routine, 'id' | 'createdAt'> | Routine, startDate?: number) => Promise<void>
-  checkAndUpdateMissedTasks: () => Promise<void>
 }
 
 export const useRoutineStore = create<RoutineState>((set, get) => ({
@@ -196,27 +195,43 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
           throw new Error(`Invalid frequency: ${routineData.frequency}`)
       }
 
+      const dueTimestamp = startOfDay(dueDate).getTime()
+
       // Create instance for each assigned user
       for (const userId of routineData.assignedTo) {
         if (!userId) {
           console.warn('Skipping invalid userId in assignedTo array')
           continue
         }
-        instances.push({
-          routineId,
-          dueDate: startOfDay(dueDate).getTime(),
-          assignedTo: userId,
-          isCompleted: false,
-          missedCount: 0,
-          householdId: routineData.householdId,
-          createdAt: Date.now()
-        })
+        
+        // Check database directly to avoid duplicates
+        const existingTasksQuery = query(
+          collection(db, 'taskInstances'),
+          where('routineId', '==', routineId),
+          where('assignedTo', '==', userId),
+          where('dueDate', '==', dueTimestamp)
+        )
+        const existingSnapshot = await getDocs(existingTasksQuery)
+        
+        // Only add if it doesn't already exist in database
+        if (existingSnapshot.empty) {
+          instances.push({
+            routineId,
+            dueDate: dueTimestamp,
+            assignedTo: userId,
+            isCompleted: false,
+            missedCount: 0,
+            householdId: routineData.householdId,
+            createdAt: Date.now()
+          })
+        }
       }
     }
 
-    // Batch create instances
+    // Batch create instances (only if there are any to create)
     if (instances.length === 0) {
-      throw new Error('No task instances to create')
+      console.log('No new task instances to create (all already exist)')
+      return
     }
     
     try {
@@ -414,61 +429,6 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
     })
 
     return unsubscribe
-  },
-
-  checkAndUpdateMissedTasks: async () => {
-    if (!db) {
-      return
-    }
-    const { tasks, routines } = get()
-    const now = startOfDay(new Date())
-    
-    for (const task of tasks) {
-      if (task.isCompleted) continue
-      
-      const dueDate = startOfDay(new Date(task.dueDate))
-      const nextDueDate = new Date(dueDate)
-      
-      // Calculate next due date based on frequency
-      const routine = routines.find(r => r.id === task.routineId)
-      if (!routine) continue
-      
-      switch (routine.frequency) {
-        case 'daily':
-          nextDueDate.setDate(nextDueDate.getDate() + 1)
-          break
-        case 'weekly':
-          nextDueDate.setDate(nextDueDate.getDate() + 7)
-          break
-        case 'biweekly':
-          nextDueDate.setDate(nextDueDate.getDate() + 14)
-          break
-        case 'monthly':
-          nextDueDate.setMonth(nextDueDate.getMonth() + 1)
-          break
-      }
-      
-      // If we've passed the next due date, this task is missed
-      if (isBefore(nextDueDate, now)) {
-        // Mark previous as done (with missed count), create new one with incremented missed count
-        await updateDoc(doc(db, 'taskInstances', task.id), {
-          isCompleted: true,
-          completedDate: Date.now(),
-          missedCount: task.missedCount
-        })
-        
-        // Create new task instance with incremented missed count
-        await addDoc(collection(db, 'taskInstances'), {
-          routineId: task.routineId,
-          dueDate: startOfDay(nextDueDate).getTime(),
-          assignedTo: task.assignedTo,
-          isCompleted: false,
-          missedCount: task.missedCount + 1,
-          householdId: task.householdId,
-          createdAt: Date.now()
-        })
-      }
-    }
   }
 }))
 

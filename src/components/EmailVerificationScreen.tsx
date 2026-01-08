@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { sendEmailVerification, reload } from 'firebase/auth'
 import { auth } from '@/firebase/config'
 import { Mail, AlertCircle, CheckCircle2, RefreshCw, Shield } from 'lucide-react'
@@ -13,20 +13,65 @@ export default function EmailVerificationScreen({ user, onVerified }: EmailVerif
   const [isSending, setIsSending] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
 
-  // Check if we're in local/test environment
+  // Auto-check verification status periodically
+  useEffect(() => {
+    if (!auth?.currentUser) return
+
+    const checkInterval = setInterval(async () => {
+      try {
+        if (!auth?.currentUser) return
+        const currentUser = auth.currentUser
+        await reload(currentUser)
+        const updatedUser = auth?.currentUser
+        if (updatedUser?.emailVerified) {
+          clearInterval(checkInterval)
+          toast.success('Email verified! Redirecting...')
+          setTimeout(() => {
+            onVerified?.()
+          }, 1000)
+        }
+      } catch (error) {
+        // Silently fail - user can manually check
+        console.error('Auto-check verification error:', error)
+      }
+    }, 5000) // Check every 5 seconds
+
+    return () => clearInterval(checkInterval)
+  }, [onVerified])
+
+  // Check if we're in local/test environment - only show debug option in development mode
+  // IMPORTANT: Check for production build - in production builds, import.meta.env.DEV is false
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development'
+  const isDev = import.meta.env.DEV && import.meta.env.MODE === 'development'
+  // Only show debug option if explicitly in dev mode AND localhost (not in production builds)
+  const showDebugOption = isLocalhost && isDev && import.meta.env.PROD === false
 
   const handleResendVerification = async () => {
-    if (!auth?.currentUser) return
+    if (!auth?.currentUser) {
+      toast.error('User session expired. Please sign in again.')
+      return
+    }
     
     setIsSending(true)
     try {
-      await sendEmailVerification(auth.currentUser)
-      toast.success('Verification email sent! Please check your inbox.')
+      await sendEmailVerification(auth.currentUser, {
+        url: `${window.location.origin}?mode=verifyEmail&continueUrl=${encodeURIComponent(window.location.origin)}`,
+        handleCodeInApp: true
+      })
+      toast.success('Verification email sent! Please check your inbox (and spam folder).')
     } catch (error: any) {
       console.error('Error sending verification email:', error)
-      toast.error(error.message || 'Failed to send verification email')
+      let errorMessage = 'Failed to send verification email'
+      
+      if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many requests. Please wait a few minutes before requesting another email.'
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = 'User not found. Please sign in again.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsSending(false)
     }
@@ -37,30 +82,53 @@ export default function EmailVerificationScreen({ user, onVerified }: EmailVerif
     
     setIsChecking(true)
     try {
+      // Reload the user to get the latest verification status
       await reload(auth.currentUser)
       
-      // Check if we're in local/test and have local verification flag
-      const hasLocalVerification = (isLocalhost || isDev) && localStorage.getItem(`email-verified-local-${auth.currentUser.uid}`) === 'true'
+      // Wait a moment for the auth state to update
+      await new Promise(resolve => setTimeout(resolve, 500))
       
-      if (auth.currentUser.emailVerified || hasLocalVerification) {
+      // Get the current user again after reload
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        toast.error('User session expired. Please sign in again.')
+        return
+      }
+      
+      // Check if we're in local/test and have local verification flag
+      const hasLocalVerification = showDebugOption && localStorage.getItem(`email-verified-local-${currentUser.uid}`) === 'true'
+      
+      // Check verification status
+      if (currentUser.emailVerified || hasLocalVerification) {
         toast.success('Email verified! Redirecting...')
         setTimeout(() => {
           onVerified?.()
         }, 1000)
       } else {
-        toast.error('Email not yet verified. Please check your inbox and click the verification link.')
+        // Try one more time after a short delay (sometimes Firebase needs a moment)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        await reload(currentUser)
+        const recheckedUser = auth.currentUser
+        if (recheckedUser?.emailVerified || hasLocalVerification) {
+          toast.success('Email verified! Redirecting...')
+          setTimeout(() => {
+            onVerified?.()
+          }, 1000)
+        } else {
+          toast.error('Email not yet verified. Please check your inbox and click the verification link. Make sure you clicked the link in the email.')
+        }
       }
     } catch (error: any) {
       console.error('Error checking verification:', error)
       // In local/test, check for local verification flag as fallback
-      const hasLocalVerification = (isLocalhost || isDev) && localStorage.getItem(`email-verified-local-${auth.currentUser.uid}`) === 'true'
+      const hasLocalVerification = showDebugOption && localStorage.getItem(`email-verified-local-${auth.currentUser?.uid}`) === 'true'
       if (hasLocalVerification) {
         toast.success('Email verified! Redirecting...')
         setTimeout(() => {
           onVerified?.()
         }, 1000)
       } else {
-        toast.error('Error checking verification status')
+        toast.error(`Error checking verification status: ${error.message || 'Unknown error'}`)
       }
     } finally {
       setIsChecking(false)
@@ -189,7 +257,7 @@ export default function EmailVerificationScreen({ user, onVerified }: EmailVerif
             </button>
             
             {/* Local/Test Only Option */}
-            {(isLocalhost || isDev) && (
+            {showDebugOption && (
               <>
                 <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center">

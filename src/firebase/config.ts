@@ -4,6 +4,7 @@ import { getFirestore } from 'firebase/firestore'
 import { getMessaging, getToken, onMessage } from 'firebase/messaging'
 import { getFunctions } from 'firebase/functions'
 import { getStorage } from 'firebase/storage'
+import { PushNotifications } from '@capacitor/push-notifications'
 
 // Firebase configuration - will be replaced with your actual config
 const firebaseConfig = {
@@ -36,8 +37,57 @@ if (isFirebaseConfigured) {
   try {
     app = initializeApp(firebaseConfig)
     auth = getAuth(app)
+    
     db = getFirestore(app)
     googleProvider = new GoogleAuthProvider()
+    
+    // Import isNativeApp to check if actually running on native platform
+    let isNativeAppCheck = false
+    if (typeof window !== 'undefined') {
+      const Capacitor = (window as any).Capacitor
+      if (Capacitor) {
+        const platform = Capacitor.getPlatform?.()
+        isNativeAppCheck = platform === 'android' || platform === 'ios'
+      }
+    }
+    
+    // Configure auth for native apps
+    if (isNativeAppCheck) {
+      const authDomain = firebaseConfig.authDomain
+      if (authDomain) {
+        console.log('[FIREBASE CONFIG] Configuring Firebase Auth for native app')
+        console.log('[FIREBASE CONFIG] Auth domain:', authDomain)
+        console.log('[FIREBASE CONFIG] Firebase will use authDomain from config for redirects')
+        console.log('[FIREBASE CONFIG] Make sure Google Cloud Console has redirect URI:', `https://${authDomain}/__/auth/handler`)
+      }
+    }
+    
+    // Configure Google provider for web (localhost vs production)
+    if (!isNativeAppCheck) {
+      const currentOrigin = window.location.origin
+      const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1')
+      
+      if (isLocalhost) {
+        // For localhost, set custom parameters to ensure redirects work
+        // Note: Firebase Auth popup should work, but we can't override authDomain
+        // The key is ensuring localhost is in Firebase authorized domains
+        console.log('[FIREBASE CONFIG] Web Google provider - localhost detected')
+        console.log('[FIREBASE CONFIG] Make sure localhost is in Firebase authorized domains')
+        console.log('[FIREBASE CONFIG] Firebase Console → Authentication → Settings → Authorized domains')
+      } else {
+        console.log('[FIREBASE CONFIG] Web Google provider - production:', currentOrigin)
+      }
+    }
+    
+    // Configure Google provider for native apps
+    if (isNativeAppCheck) {
+      const authDomain = firebaseConfig.authDomain
+      if (authDomain) {
+        // Don't set custom parameters - let Firebase use authDomain from config
+        // The key is ensuring Google Cloud Console has the correct redirect URI
+        console.log('[FIREBASE CONFIG] Google provider configured for native app')
+      }
+    }
   } catch (error) {
     console.error('Firebase initialization error:', error)
   }
@@ -89,10 +139,15 @@ if (app) {
 // Export with type assertions - components will check isConfigured before using
 export { auth, db, googleProvider, functions, storage }
 
-// Initialize messaging (only in browser, not in service worker)
+// Initialize messaging (only in browser, not in service worker, and not in native apps)
 let messaging: ReturnType<typeof getMessaging> | null = null
 
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator && app) {
+// Check if we're in a native Capacitor app
+const isNativeApp = typeof window !== 'undefined' && !!(window as any).Capacitor
+
+// Only initialize Firebase Messaging SDK for web in browser (not native apps)
+// Native apps should use Capacitor Push Notifications plugin or Firebase native SDKs
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && app && !isNativeApp) {
   try {
     messaging = getMessaging(app)
   } catch (error) {
@@ -104,12 +159,81 @@ export { messaging }
 
 // Request notification permission and get token
 export async function requestNotificationPermission(): Promise<string | null> {
+  // Check if we're in a native Capacitor app
+  const isNativeApp = typeof window !== 'undefined' && !!(window as any).Capacitor
+  
+  // For native apps, use Capacitor Push Notifications plugin
+  if (isNativeApp) {
+    console.log('Native app detected - using Capacitor Push Notifications')
+    try {
+      // Request permission
+      const permissionResult = await PushNotifications.requestPermissions()
+      
+      if (permissionResult.receive === 'granted') {
+        // Register for push notifications
+        await PushNotifications.register()
+        
+        // Wait for registration to complete and get the token
+        return new Promise((resolve) => {
+          let resolved = false
+          
+          const cleanup = () => {
+            if (!resolved) {
+              resolved = true
+              PushNotifications.removeAllListeners()
+            }
+          }
+          
+          const tokenHandler = (result: { value: string }) => {
+            if (resolved) return
+            const token = result.value
+            console.log('FCM token obtained for native app:', token.substring(0, 20) + '...')
+            cleanup()
+            resolve(token)
+          }
+          
+          const errorHandler = (error: any) => {
+            if (resolved) return
+            console.error('Error registering for push notifications:', error)
+            cleanup()
+            resolve(null)
+          }
+          
+          // Listen for registration success
+          PushNotifications.addListener('registration', tokenHandler)
+          PushNotifications.addListener('registrationError', errorHandler)
+          
+          // Timeout after 10 seconds
+          setTimeout(() => {
+            if (resolved) return
+            console.warn('Push notification registration timeout')
+            cleanup()
+            resolve(null)
+          }, 10000)
+        })
+      } else {
+        console.warn('Push notification permission denied')
+        return null
+      }
+    } catch (error: any) {
+      console.error('Error requesting push notification permission:', error)
+      return null
+    }
+  }
+
+  // For web apps, use Firebase Messaging SDK
   if (!messaging) {
     console.warn('Firebase Messaging not initialized')
     return null
   }
 
   try {
+    // For web apps, check Notification API
+    if (typeof Notification === 'undefined') {
+      console.warn('Notification API not available')
+      return null
+    }
+
     // Check if VAPID key is configured
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
     console.log('VAPID Key check in requestNotificationPermission:', {
@@ -134,7 +258,10 @@ export async function requestNotificationPermission(): Promise<string | null> {
     }
   } catch (error: any) {
     // Log notification errors for debugging
-    if (error?.code === 'messaging/invalid-vapid-key' || 
+    if (error?.code === 'messaging/invalid-registration-token' || 
+        error?.code === 'messaging/registration-token-not-registered') {
+      console.error('Invalid FCM token:', error.message)
+    } else if (error?.code === 'messaging/invalid-vapid-key' || 
         error?.message?.includes('applicationServerKey')) {
       console.error('Invalid VAPID key. Please check your VITE_FIREBASE_VAPID_KEY in .env file:', error.message)
     } else {

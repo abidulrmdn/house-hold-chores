@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, Copy, Check, Share2 } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import toast from 'react-hot-toast'
+import { getPublicUrl } from '@/utils/device'
 
 interface InviteModalProps {
   isOpen: boolean
@@ -16,7 +17,7 @@ export default function InviteModal({ isOpen, onClose, householdId, householdNam
 
   if (!isOpen) return null
 
-  const inviteLink = `${window.location.origin}/join/${householdId}`
+  const inviteLink = `${getPublicUrl()}/join/${householdId}`
   const inviteCode = householdId
 
   const copyToClipboard = (text: string, label: string) => {

@@ -1,15 +1,34 @@
 import { messaging } from '@/firebase/config'
 import { getToken } from 'firebase/messaging'
+import { requestNotificationPermission } from '@/firebase/config'
 
 // Store notification token in localStorage
 const NOTIFICATION_TOKEN_KEY = 'fcm_notification_token'
 
 export async function getNotificationToken(): Promise<string | null> {
   try {
+    // Check if we're in a native Capacitor app
+    const isNativeApp = typeof window !== 'undefined' && !!(window as any).Capacitor
+    
+    // For native apps, use the requestNotificationPermission function which handles Capacitor Push Notifications
+    if (isNativeApp) {
+      const token = await requestNotificationPermission()
+      if (token) {
+        localStorage.setItem(NOTIFICATION_TOKEN_KEY, token)
+      }
+      return token
+    }
+    
+    // For web apps, use Firebase Messaging SDK
     if (!messaging) return null
     
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
     if (!vapidKey || vapidKey === 'demo-vapid-key' || vapidKey.trim() === '') {
+      return null
+    }
+
+    // Check if Notification API is available
+    if (typeof Notification === 'undefined') {
       return null
     }
 

@@ -32,6 +32,7 @@ export default function SwipeableTaskCard({
   const [isCompleting, setIsCompleting] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false)
+  const [isCelebrating, setIsCelebrating] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const x = useMotionValue(0)
   const { completeTask, uncompleteTask } = useRoutineStore()
@@ -58,9 +59,12 @@ export default function SwipeableTaskCard({
   const rightBgOpacity = useTransform(x, [0, SWIPE_THRESHOLD], [0, 1])
   const leftBgOpacity = useTransform(x, [-SWIPE_THRESHOLD, 0], [1, 0])
   
-  // Text opacity for action labels
-  const rightTextOpacity = useTransform(x, [30, SWIPE_THRESHOLD], [0, 1])
-  const leftTextOpacity = useTransform(x, [-SWIPE_THRESHOLD, -30], [1, 0])
+  // Text opacity for action labels - show icon earlier (at 20px instead of 30px)
+  const rightTextOpacity = useTransform(x, [20, SWIPE_THRESHOLD], [0, 1])
+  const leftTextOpacity = useTransform(x, [-SWIPE_THRESHOLD, -20], [1, 0])
+  
+  // Icon opacity - show checkmark icon even earlier (at 15px)
+  const rightIconOpacity = useTransform(x, [15, SWIPE_THRESHOLD], [0, 1])
 
   const getStatusColor = () => {
     if (task.isCompleted) return 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 opacity-60'
@@ -79,6 +83,9 @@ export default function SwipeableTaskCard({
   }
 
   const handleDragEnd = async (_: any, info: PanInfo) => {
+    // Restore body scroll after drag
+    document.body.style.overflowX = ''
+    
     const velocity = info.velocity.x
     const currentX = x.get()
 
@@ -94,12 +101,18 @@ export default function SwipeableTaskCard({
     if (swipeRight) {
       // Swipe right - complete
       setIsCompleting(true)
+      setIsCelebrating(true)
       try {
         await completeTask(task.id, user.uid)
-        // Don't animate off screen - just reset position
+        // Wait a bit before resetting position to show celebration
+        await new Promise(resolve => setTimeout(resolve, 300))
+        // Reset position with smooth animation
         animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 })
+        // Stop celebration after animation
+        setTimeout(() => setIsCelebrating(false), 600)
       } catch (error) {
         console.error('Error completing task:', error)
+        setIsCelebrating(false)
         // Snap back on error
         animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 })
       } finally {
@@ -110,7 +123,9 @@ export default function SwipeableTaskCard({
       setIsCompleting(true)
       try {
         await uncompleteTask(task.id)
-        // Don't animate off screen - just reset position
+        // Wait a bit before resetting position
+        await new Promise(resolve => setTimeout(resolve, 200))
+        // Reset position with smooth animation
         animate(x, 0, { type: 'spring', stiffness: 300, damping: 30 })
       } catch (error) {
         console.error('Error uncompleting task:', error)
@@ -135,11 +150,15 @@ export default function SwipeableTaskCard({
           className="flex-1 bg-green-500 flex items-center justify-end pr-6"
         >
           <motion.div
-            style={{ opacity: rightTextOpacity }}
+            style={{ opacity: rightIconOpacity }}
             className="flex items-center gap-2 text-white font-semibold"
           >
             <Check className="w-6 h-6" />
-            <span>Complete</span>
+            <motion.span
+              style={{ opacity: rightTextOpacity }}
+            >
+              Complete
+            </motion.span>
           </motion.div>
         </motion.div>
         
@@ -167,9 +186,23 @@ export default function SwipeableTaskCard({
         dragConstraints={task.isCompleted ? { left: -150, right: 0 } : { left: 0, right: 150 }}
         dragElastic={0.1}
         dragMomentum={false}
+        dragPropagation={false}
+        onDragStart={() => {
+          // Prevent body scroll during drag
+          document.body.style.overflowX = 'hidden'
+        }}
         onDragEnd={handleDragEnd}
         whileDrag={{ cursor: 'grabbing' }}
-        className={`relative ${getStatusColor()} border-2 rounded-xl p-5 sm:p-4 ${isSelectionMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+        animate={isCelebrating ? {
+          boxShadow: [
+            '0 0 0px rgba(34, 197, 94, 0)',
+            '0 0 20px rgba(34, 197, 94, 0.6)',
+            '0 0 0px rgba(34, 197, 94, 0)'
+          ],
+          scale: [1, 1.02, 1]
+        } : {}}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className={`relative ${getStatusColor()} border-2 rounded-xl p-5 sm:p-4 ${isSelectionMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} ${isCelebrating ? 'ring-2 ring-green-400 ring-opacity-50' : ''}`}
         data-tutorial="task-card"
       >
         <div className="flex flex-col min-w-0">

@@ -59,7 +59,20 @@ export default function MobileToolbar({
   }, [expandedSection])
 
   return (
-    <div className="sm:hidden mobile-toolbar mobile-toolbar-bottom fixed bottom-0 left-0 right-0 z-40 safe-area-bottom">
+    <div 
+      className="sm:hidden mobile-toolbar mobile-toolbar-bottom fixed left-0 right-0 z-40" 
+      style={{ 
+        position: 'fixed', 
+        bottom: 0,
+        left: 0, 
+        right: 0, 
+        transform: 'translateZ(0)', 
+        width: '100%', 
+        maxWidth: '100vw',
+        marginBottom: 0,
+        paddingBottom: 0
+      }}
+    >
       {/* Expanded Sections - Render above toolbar */}
       {expandedSection && (
         <div className="absolute bottom-full left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-lg max-h-[60vh] overflow-y-auto">
@@ -179,7 +192,10 @@ export default function MobileToolbar({
       )}
       
       {/* Main Toolbar Row */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+      <div 
+        className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg"
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
+      >
         <div className="flex items-center justify-around px-1 py-2">
           {/* Search Button */}
           <button
